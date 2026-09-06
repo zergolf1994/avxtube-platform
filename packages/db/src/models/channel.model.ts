@@ -109,6 +109,14 @@ const channelSchema = new Schema(
 channelSchema.index({ handle: 1 }, { unique: true })
 channelSchema.index({ kind: 1, status: 1, createdAt: -1 })
 channelSchema.index({ kind: 1, "metadata.roles": 1, status: 1 })
+channelSchema.index(
+  { kind: 1, name: 1, "metadata.gender": 1 },
+  { collation: { locale: "en", strength: 2 } }
+)
+channelSchema.index(
+  { "metadata.importKey": 1 },
+  { unique: true, sparse: true }
+)
 channelSchema.index({ name: "text", handle: "text", keywords: "text" })
 
 export type ChannelSchemaType = InferSchemaType<typeof channelSchema>
