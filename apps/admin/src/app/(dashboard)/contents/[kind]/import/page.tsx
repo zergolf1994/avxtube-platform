@@ -9,6 +9,8 @@ import type { QueueImportStatus } from "@/lib/queue-import"
 
 import { SitemapImportForm } from "./sitemap-import-form"
 import { QueuePager } from "./queue-pager"
+import { QueueRefreshButton } from "./queue-refresh-button"
+import { RetryQueueImportButton } from "./retry-queue-import-button"
 import { QueueStatusFilter } from "./queue-status-filter"
 
 const QUEUE_STATUSES: QueueImportStatus[] = [
@@ -111,7 +113,10 @@ export default async function SitemapImportPage({
                 {t("queueTotal", { count: queue.total })}
               </p>
             </div>
-            <QueueStatusFilter value={status} />
+            <div className="flex flex-wrap items-center gap-2">
+              <QueueRefreshButton />
+              <QueueStatusFilter value={status} />
+            </div>
           </div>
         </div>
         {queue.items.length ? (
@@ -122,7 +127,9 @@ export default async function SitemapImportPage({
                   <th className="px-5 py-3 font-medium">{t("dvdId")}</th>
                   <th className="px-5 py-3 font-medium">{t("source")}</th>
                   <th className="px-5 py-3 font-medium">{t("statusLabel")}</th>
+                  <th className="px-5 py-3 font-medium">{t("worker")}</th>
                   <th className="px-5 py-3 font-medium">{t("created")}</th>
+                  <th className="px-5 py-3 font-medium">{t("actions")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -143,9 +150,30 @@ export default async function SitemapImportPage({
                       {item.ref}
                     </td>
                     <td className="px-5 py-3">
-                      <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium">
-                        {t(`status.${item.status}`)}
-                      </span>
+                      <div className="flex max-w-64 flex-col items-start gap-1.5">
+                        <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium">
+                          {t(`status.${item.status}`)}
+                        </span>
+                        {item.status === "failed" && item.error ? (
+                          <span
+                            className="line-clamp-2 text-xs text-destructive"
+                            title={item.error}
+                          >
+                            {item.error}
+                          </span>
+                        ) : null}
+                      </div>
+                    </td>
+                    <td className="max-w-56 px-5 py-3 text-xs text-muted-foreground">
+                      {item.workerId ? (
+                        <span className="block truncate" title={item.workerId}>
+                          {item.workerId}
+                        </span>
+                      ) : item.status === "processing" ? (
+                        t("workerUnknown")
+                      ) : (
+                        "—"
+                      )}
                     </td>
                     <td className="px-5 py-3 whitespace-nowrap text-muted-foreground">
                       {new Intl.DateTimeFormat(undefined, {
@@ -153,6 +181,13 @@ export default async function SitemapImportPage({
                         timeStyle: "short",
                         timeZone: "Asia/Bangkok",
                       }).format(new Date(item.createdAt))}
+                    </td>
+                    <td className="px-5 py-3">
+                      {item.status === "failed" ? (
+                        <RetryQueueImportButton id={item._id} />
+                      ) : (
+                        "—"
+                      )}
                     </td>
                   </tr>
                 ))}

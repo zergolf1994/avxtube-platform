@@ -48,23 +48,26 @@ export function publicVideoListFilter(sort?: unknown): Record<string, unknown> {
 export function contentLookups(): PipelineStage[] {
   return [
     {
+      $set: {
+        __viewerRelationIds: {
+          $setUnion: [
+            { $ifNull: ["$studioIds", []] },
+            { $ifNull: ["$actressIds", []] },
+            { $ifNull: ["$actorIds", []] },
+            { $ifNull: ["$directorIds", []] },
+            { $ifNull: ["$channelIds", []] },
+          ],
+        },
+      },
+    },
+    {
       $lookup: {
         from: ChannelModel.collection.name,
-        let: {
-          relationIds: {
-            $setUnion: [
-              { $ifNull: ["$studioIds", []] },
-              { $ifNull: ["$actressIds", []] },
-              { $ifNull: ["$actorIds", []] },
-              { $ifNull: ["$directorIds", []] },
-              { $ifNull: ["$channelIds", []] },
-            ],
-          },
-        },
+        localField: "__viewerRelationIds",
+        foreignField: "_id",
         pipeline: [
           {
             $match: {
-              $expr: { $in: ["$_id", "$$relationIds"] },
               status: "active",
               deletedAt: null,
             },
@@ -84,6 +87,7 @@ export function contentLookups(): PipelineStage[] {
         as: "channels",
       },
     },
+    { $unset: "__viewerRelationIds" },
     {
       $lookup: {
         from: MediaModel.collection.name,
@@ -131,11 +135,11 @@ export function contentPagePipeline(
   filter: Record<string, unknown>,
   limit = 24,
   offset = 0,
-  sort: Record<string, 1 | -1> = { createdAt: -1, _id: -1 }
+  sort: Record<string, 1 | -1> | null = { createdAt: -1, _id: -1 }
 ): PipelineStage[] {
   return [
     { $match: filter },
-    { $sort: sort },
+    ...(sort ? [{ $sort: sort } as PipelineStage.Sort] : []),
     { $skip: offset },
     { $limit: limit },
     ...contentLookups(),
@@ -172,23 +176,32 @@ export function getPublicContents(
   filter: Record<string, unknown> = publicVideoFilter(),
   limit = 24,
   offset = 0,
-  sort?: Record<string, 1 | -1>
+  sort?: Record<string, 1 | -1> | null
 ) {
   return ContentModel.aggregate<Record<string, unknown>>(
     contentPagePipeline(filter, limit, offset, sort)
   ).exec()
 }
 
-export async function findPublicVideo(idOrSlug: string, kind = "video") {
+export async function findPublicVideo(
+  idOrSlug: string,
+  kind = "video"
+): Promise<Record<string, unknown> | null> {
+  const normalized = idOrSlug.trim().toLowerCase()
+  const identity = UUID_PATTERN.test(normalized)
+    ? { _id: normalized }
+    : { slug: normalized }
   const [content] = await getPublicContents(
-    {
-      ...publicVideoFilter(kind),
-      $or: [{ _id: idOrSlug }, { slug: idOrSlug.toLowerCase() }],
-    },
-    1
+    { ...publicVideoFilter(kind), ...identity },
+    1,
+    0,
+    null
   )
   return content ?? null
 }
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 export function mapContentToVideo(
   content: Record<string, unknown>,
@@ -345,29 +358,54 @@ function contentTranslation(
 }
 
 export async function getPublicVideoCategories() {
-  const rows = await ContentModel.aggregate<{ name: string }>([
-    { $match: publicVideoFilter() },
-    { $unwind: "$termIds" },
-    { $group: { _id: "$termIds" } },
-    {
-      $lookup: {
-        from: TermModel.collection.name,
-        localField: "_id",
-        foreignField: "_id",
-        pipeline: [
-          {
-            $match: { taxonomy: "category", status: "active", deletedAt: null },
-          },
-          { $project: { name: 1 } },
-        ],
-        as: "term",
-      },
-    },
-    { $unwind: "$term" },
-    { $project: { _id: 0, name: "$term.name" } },
-    { $sort: { name: 1 } },
-  ])
-  return rows.map((term) => term.name)
+  const now = Date.now()
+  if (publicCategoryCache.value && publicCategoryCache.expiresAt > now)
+    return publicCategoryCache.value
+  if (publicCategoryCache.pending) return publicCategoryCache.pending
+
+  // Categories are first-class terms. Deriving this list by unwinding every
+  // content.termIds array also walks tens of thousands of tag references on
+  // every Home request, even though only category records are needed.
+  const version = publicCategoryCache.version
+  const request = TermModel.find({
+    taxonomy: "category",
+    status: "active",
+    deletedAt: null,
+  })
+    .select("name")
+    .sort({ name: 1 })
+    .lean()
+    .then((rows) => {
+      const names = [
+        ...new Set(rows.map((term) => stringValue(term.name)).filter(Boolean)),
+      ]
+      if (publicCategoryCache.version === version) {
+        publicCategoryCache.value = names
+        publicCategoryCache.expiresAt = Date.now() + PUBLIC_CATEGORY_CACHE_MS
+      }
+      return names
+    })
+    .finally(() => {
+      if (publicCategoryCache.pending === request)
+        publicCategoryCache.pending = null
+    })
+  publicCategoryCache.pending = request
+  return request
+}
+
+const PUBLIC_CATEGORY_CACHE_MS = 5 * 60_000
+const publicCategoryCache: {
+  value: string[] | null
+  expiresAt: number
+  pending: Promise<string[]> | null
+  version: number
+} = { value: null, expiresAt: 0, pending: null, version: 0 }
+
+export function invalidatePublicVideoCategoriesCache() {
+  publicCategoryCache.value = null
+  publicCategoryCache.expiresAt = 0
+  publicCategoryCache.pending = null
+  publicCategoryCache.version += 1
 }
 
 export async function resolveCategoryId(value: string) {

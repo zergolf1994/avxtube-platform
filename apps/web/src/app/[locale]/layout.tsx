@@ -14,11 +14,12 @@ import { getMessages, setRequestLocale } from "next-intl/server"
 import { defaultTimeZone, localeDirections, localeTags } from "@workspace/i18n"
 import { Metadata } from "next"
 import { selectClientMessages } from "@/i18n/client-messages"
+import { siteUrl } from "@/i18n/metadata"
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" })
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://avxtube.org"),
+  metadataBase: new URL(siteUrl),
 }
 
 const fontMono = Geist_Mono({

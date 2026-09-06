@@ -40,3 +40,21 @@ export const AdsImageShowOn = {
 } as const
 export type AdsImageShowOn =
   (typeof AdsImageShowOn)[keyof typeof AdsImageShowOn]
+
+export const WorkerType = {
+  SCRAPER: "scraper",
+  DOWNLOAD: "download",
+  TRANSCODE: "transcode",
+  TRANSFER: "transfer",
+  SPRITESHEET: "spritesheet",
+  PREWARM: "prewarm",
+} as const
+export type WorkerType = (typeof WorkerType)[keyof typeof WorkerType]
+
+export const WorkerStatus = {
+  IDLE: "idle",
+  BUSY: "busy",
+  PAUSED: "paused",
+  OFFLINE: "offline",
+} as const
+export type WorkerStatus = (typeof WorkerStatus)[keyof typeof WorkerStatus]

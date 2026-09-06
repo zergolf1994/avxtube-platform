@@ -43,9 +43,12 @@ export default async function LatestVideosPage({
     ? rawSearch.page[0]
     : rawSearch.page
   const page = Math.max(1, Number.parseInt(rawPage ?? "1", 10) || 1)
-  const result = await getVideosPage((page - 1) * PAGE_SIZE, PAGE_SIZE).catch(
-    () => ({ items: [], nextCursor: null, total: 0 })
-  )
+  const result = await getVideosPage(
+    (page - 1) * PAGE_SIZE,
+    PAGE_SIZE,
+    undefined,
+    locale
+  ).catch(() => ({ items: [], nextCursor: null, total: 0 }))
   const pageCount = Math.max(1, Math.ceil(result.total / PAGE_SIZE))
   const labels = {
     views: (count: string) => t("views", { count }),

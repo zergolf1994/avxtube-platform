@@ -52,7 +52,7 @@ export default async function TrendingPage({
       nextPage: null,
       total: 0,
     })),
-    getVideosPage(0, 8, "trending").catch(() => ({
+    getVideosPage(0, 8, "trending", locale).catch(() => ({
       items: [],
       nextCursor: null,
       total: 0,

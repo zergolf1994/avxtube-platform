@@ -17,8 +17,12 @@ import {
   publicVideoListFilter,
 } from "../src/services/content-video.service"
 import videosRouter from "../src/routes/videos.routes"
+import { invalidateDomainSettingsCache } from "../src/services/settings/domain-setting.service"
 
-afterEach(() => mock.restoreAll())
+afterEach(() => {
+  invalidateDomainSettingsCache()
+  mock.restoreAll()
+})
 
 function fixture() {
   return {
@@ -141,12 +145,10 @@ test("pagination happens before indexed reference lookups, and sorting has an ID
   const joins = pipeline
     .filter((stage) => "$lookup" in stage)
     .map((stage) => stage.$lookup)
-  assert.ok(joins[0]?.let?.relationIds)
   assert.deepEqual(
-    joins
-      .slice(1)
-      .map((join) => [join.from, join.localField, join.foreignField]),
+    joins.map((join) => [join.from, join.localField, join.foreignField]),
     [
+      ["channels", "__viewerRelationIds", "_id"],
       ["medias", "mediaIds", "_id"],
       ["terms", "termIds", "_id"],
     ]
@@ -338,7 +340,7 @@ test("video details expose release date, channels, and every term taxonomy", () 
   )
   assert.equal(video.channel?.name, "Studio")
 })
-test("channel statistics are joined from public content, not stale counters", () => {
+test("channel statistics use the batched public-content result", () => {
   const row = {
     _id: "person-id",
     name: "Actor",
@@ -360,9 +362,11 @@ test("channel statistics are joined from public content, not stale counters", ()
   assert.deepEqual(channel.metadata?.roles, ["actor"])
   assert.equal(channel.metadata?.secret, undefined)
   const pipeline = channelPagePipeline({ status: "active", deletedAt: null })
-  const lookup = pipeline.find((stage) => "$lookup" in stage)?.$lookup
-  assert.equal(lookup?.let?.channelId, "$_id")
-  assert.ok(JSON.stringify(lookup).includes('"visibility":"public"'))
+  assert.equal(
+    pipeline.some((stage) => "$lookup" in stage),
+    false
+  )
+  assert.ok(pipeline.some((stage) => "$limit" in stage))
 })
 
 test("video endpoint returns accurate pagination without N+1 relation queries", async () => {
@@ -482,7 +486,8 @@ test("watch player config requires a video slug and both database domains", () =
   assert.equal(short.playbackUrl, "https://cdn.example/1080.m3u8")
 })
 
-test("every response uses a fresh database static domain shared across all mapped rows", async () => {
+test("domain settings are shared across responses until invalidated", async () => {
+  invalidateDomainSettingsCache()
   let domain = "static.example"
   const settings = mock.method(SettingModel, "findOne", () => ({
     lean: async () => ({
@@ -501,11 +506,18 @@ test("every response uses a fresh database static domain shared across all mappe
   const second = await getContentMappers()
   assert.equal(
     second.mapVideo(fixture()).previewUrl,
-    "//changed.example/example-video/preview.mp4"
+    "//static.example/example-video/preview.mp4"
   )
   assert.equal(
     first.mapVideo(fixture()).previewUrl,
     "//static.example/example-video/preview.mp4"
+  )
+  assert.equal(settings.mock.callCount(), 1)
+  invalidateDomainSettingsCache()
+  const third = await getContentMappers()
+  assert.equal(
+    third.mapVideo(fixture()).previewUrl,
+    "//changed.example/example-video/preview.mp4"
   )
   assert.equal(settings.mock.callCount(), 2)
 })

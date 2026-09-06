@@ -14,6 +14,7 @@ export * from "./subscription.model"
 export * from "./term.model"
 export * from "./storage.model"
 export * from "./media.model"
+export * from "./worker.model"
 
 // Content
 export * from "./content.model"

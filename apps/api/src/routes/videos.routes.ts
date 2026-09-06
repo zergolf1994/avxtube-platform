@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto"
+import type { Video } from "@workspace/core/types"
 import { ContentModel } from "@workspace/db/models"
 import { Router, type NextFunction, type Request, type Response } from "express"
 
@@ -13,7 +15,9 @@ import {
   publicVideoFilter,
   publicVideoListFilter,
   stringValue,
-  contentLookups,
+  numberValue,
+  toRecord,
+  contentPagePipeline,
 } from "../services/content-video.service"
 import {
   createVideoComment,
@@ -27,9 +31,26 @@ import {
 } from "../services/video-interaction.service"
 
 const router: Router = Router()
+const WATCH_CORE_CACHE_MS = 30_000
+const RELATED_POOL_CACHE_MS = 5 * 60_000
+type WatchCore = {
+  content: Record<string, unknown>
+  relatedContents: Record<string, unknown>[]
+}
+const watchCoreCache = new Map<
+  string,
+  { expiresAt: number; pending: Promise<WatchCore | null> }
+>()
+let relatedPoolCache:
+  | {
+      expiresAt: number
+      pending: Promise<Record<string, unknown>[]>
+    }
+  | undefined
 
 router.get("/", async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const locale = normalizeContentLocale(req.query.locale)
     const paginated =
       typeof req.query.cursor === "string" ||
       typeof req.query.limit === "string"
@@ -43,7 +64,7 @@ router.get("/", async (req: Request, res: Response, next: NextFunction) => {
     const [contents, total, { mapVideo }] = await Promise.all([
       getPublicContents(filter, limit, cursor, sort),
       ContentModel.countDocuments(filter),
-      getContentMappers(),
+      getContentMappers(locale),
     ])
     const videos = contents.map(mapVideo)
 
@@ -235,22 +256,21 @@ router.get(
   async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
     try {
       const locale = normalizeContentLocale(req.query.locale)
-      const content = await findPublicVideo(req.params.id)
-      if (!content) {
+      const core = await getWatchCore(req.params.id)
+      if (!core) {
         res.status(404).json({ error: "Video not found" })
         return
       }
-      const relatedContents = await ContentModel.aggregate<
-        Record<string, unknown>
-      >([
-        { $match: { ...publicVideoFilter(), _id: { $ne: content._id } } },
-        { $sample: { size: 20 } },
-        ...contentLookups(),
-      ]).exec()
-      const { mapVideo } = await getContentMappers(locale)
+      const { content, relatedContents } = core
+      const commentCount = numberValue(toRecord(content.stats).commentCount)
+      const [{ mapVideo }, comments] = await Promise.all([
+        getContentMappers(locale),
+        commentCount > 0
+          ? getVideoComments(stringValue(content._id), 0, 10)
+          : Promise.resolve({ items: [], nextCursor: null, total: 0 }),
+      ])
       const video = mapVideo(content)
-      const relatedVideos = relatedContents.map(mapVideo)
-      const comments = await getVideoComments(stringValue(content._id), 0, 10)
+      const relatedVideos = relatedContents.map(mapVideo).map(toRelatedSummary)
       if (!video) {
         res.status(404).json({ error: "Video not found" })
         return
@@ -272,6 +292,104 @@ router.get(
 function nonNegativeInteger(value: unknown, fallback: number) {
   const parsed = Number.parseInt(typeof value === "string" ? value : "", 10)
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback
+}
+
+function getWatchCore(idOrSlug: string): Promise<WatchCore | null> {
+  const key = idOrSlug.trim().toLowerCase()
+  const cached = watchCoreCache.get(key)
+  if (cached && cached.expiresAt > Date.now()) return cached.pending
+
+  const pending = Promise.all([
+    findPublicVideo(idOrSlug),
+    // Fetch one extra candidate because the requested video may be inside the
+    // shared random UUID slice. Both indexed queries can run in parallel.
+    getRelatedPool(),
+  ])
+    .then(([content, candidates]) => {
+      if (!content) return null
+      const contentId = stringValue(content._id)
+      return {
+        content,
+        relatedContents: candidates
+          .filter((candidate) => stringValue(candidate._id) !== contentId)
+          .slice(0, 20),
+      }
+    })
+    .catch((error) => {
+      watchCoreCache.delete(key)
+      throw error
+    })
+
+  if (watchCoreCache.size >= 250) {
+    const now = Date.now()
+    for (const [cacheKey, entry] of watchCoreCache) {
+      if (entry.expiresAt <= now) watchCoreCache.delete(cacheKey)
+    }
+    if (watchCoreCache.size >= 250) {
+      const oldestKey = watchCoreCache.keys().next().value
+      if (oldestKey) watchCoreCache.delete(oldestKey)
+    }
+  }
+  watchCoreCache.set(key, {
+    expiresAt: Date.now() + WATCH_CORE_CACHE_MS,
+    pending,
+  })
+  return pending
+}
+
+function getRelatedPool() {
+  if (relatedPoolCache && relatedPoolCache.expiresAt > Date.now())
+    return relatedPoolCache.pending
+
+  const pending = getRandomRelatedContents("", 21).catch((error) => {
+    relatedPoolCache = undefined
+    throw error
+  })
+  relatedPoolCache = {
+    expiresAt: Date.now() + RELATED_POOL_CACHE_MS,
+    pending,
+  }
+  return pending
+}
+
+function toRelatedSummary(video: Video): Video {
+  return {
+    id: video.id,
+    title: video.title,
+    description: "",
+    thumbnailUrl: video.thumbnailUrl,
+    durationSeconds: video.durationSeconds,
+    viewCount: video.viewCount,
+    publishedAt: video.publishedAt,
+    category: video.category,
+    ...(video.previewUrl ? { previewUrl: video.previewUrl } : {}),
+    ...(video.channel ? { channel: video.channel } : {}),
+  }
+}
+
+async function getRandomRelatedContents(excludedId: string, limit: number) {
+  const seed = randomUUID()
+  const findRange = (range: Record<string, string>) =>
+    ContentModel.aggregate<Record<string, unknown>>(
+      contentPagePipeline(
+        {
+          ...publicVideoFilter(),
+          _id: { ...range, ...(excludedId ? { $ne: excludedId } : {}) },
+        },
+        limit,
+        0,
+        { _id: 1 }
+      )
+    )
+      .hint({ _id: 1 })
+      .exec()
+
+  // Content IDs are UUIDv4, so an indexed seek from a random UUID produces a
+  // random slice without MongoDB's $sample scanning the whole public catalog.
+  const after = await findRange({ $gte: seed })
+  if (after.length >= limit) return after
+  const before = await findRange({ $lt: seed })
+  return [...after, ...before.slice(0, limit - after.length)]
 }
 
 function boundedLimit(value: unknown, fallback: number) {

@@ -6,7 +6,7 @@ const { Schema, model, models } = mongoose
 
 export const MEDIA_KINDS = ["image", "video", "audio", "subtitle", "other"] as const
 export const MEDIA_PROVIDERS = ["local", "s3", "remote"] as const
-export const MEDIA_QUALITIES = ["original", "360", "480", "720", "1080"] as const
+export const MEDIA_QUALITIES = ["original", "240", "360", "480", "640", "720", "1080"] as const
 export type MediaQuality = (typeof MEDIA_QUALITIES)[number]
 export const MEDIA_STATUSES = [
   "pending",

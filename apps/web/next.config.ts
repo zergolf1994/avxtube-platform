@@ -15,7 +15,7 @@ const nextConfig: NextConfig = {
     "@workspace/services",
     "@workspace/ui",
   ],
-  allowedDevOrigins: ["avxtube.org"],
+  allowedDevOrigins: ["avxtube.com", "avxtube.org"],
   devIndicators: false,
   rewrites: async () => {
     return [

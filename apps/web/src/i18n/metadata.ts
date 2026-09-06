@@ -6,7 +6,11 @@ import { localeTags, locales, type Locale } from "@workspace/i18n/config"
 import { contentMessageKey } from "./content-key"
 import { getPathname } from "./navigation"
 
-export const siteUrl = "https://avxtube.org"
+export const siteUrl = normalizeSiteUrl(
+  process.env.NEXT_PUBLIC_SITE_URL ??
+    process.env.SITE_URL ??
+    "https://avxtube.com"
+)
 
 type PageMetadata = {
   locale: Locale
@@ -91,4 +95,8 @@ export function absoluteUrl(value: string) {
 
 export function serializeJsonLd(value: unknown) {
   return JSON.stringify(value).replace(/</g, "\\u003c")
+}
+
+function normalizeSiteUrl(value: string) {
+  return new URL(value).origin
 }

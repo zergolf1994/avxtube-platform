@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation"
 
-export default function WatchIndexPage() {
+export default function ViewerCatchAllPage() {
   notFound()
 }

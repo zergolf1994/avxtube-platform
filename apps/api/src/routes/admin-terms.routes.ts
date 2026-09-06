@@ -8,6 +8,7 @@ import {
   getRequestActor,
   requireAdmin,
 } from "../middlewares/user-access.middleware"
+import { invalidatePublicVideoCategoriesCache } from "../services/content-video.service"
 
 const router: Router = Router()
 router.use(authenticateUser, requireAdmin)
@@ -68,6 +69,7 @@ router.post("/", async (req: Request, res: Response, next: NextFunction) => {
       createdBy: actor.id,
       deletedAt: input.status === "deleted" ? new Date() : undefined,
     })
+    if (input.taxonomy === "category") invalidatePublicVideoCategoriesCache()
     res.status(201).json({ term: term.toObject() })
   } catch (error) {
     next(error)
@@ -136,6 +138,8 @@ router.patch(
         },
         { new: true, runValidators: true }
       ).lean()
+      if (current.taxonomy === "category")
+        invalidatePublicVideoCategoriesCache()
       res.status(200).json({ term })
     } catch (error) {
       next(error)
@@ -156,6 +160,7 @@ router.delete(
         res.status(404).json({ error: "Term not found" })
         return
       }
+      if (term.taxonomy === "category") invalidatePublicVideoCategoriesCache()
       res.status(200).json({ deleted: true })
     } catch (error) {
       next(error)
@@ -193,6 +198,8 @@ router.post(
           })
           term = document.toObject()
           created = true
+          if (item.taxonomy === "category")
+            invalidatePublicVideoCategoriesCache()
         }
         resolved.push({ ...item, id: term._id, name: term.name, created })
       }

@@ -9,5 +9,10 @@
     "title": "Video player",
     "description": "The video viewing experience is ready for development.",
     "hint": "Add the player and video information components here."
+  },
+  "notFound": {
+    "title": "Page not found",
+    "description": "The page may have been removed, moved, or the address may be incorrect.",
+    "backHome": "Back to home"
   }
 }

@@ -4,6 +4,7 @@ import * as React from "react"
 import {
   Clapperboard,
   ChevronDown,
+  Cpu,
   ExternalLink,
   FileText,
   HardDrive,
@@ -242,6 +243,16 @@ function AdminSidebar({ user }: { user: AdminUser }) {
           <SidebarGroupLabel>{t("infrastructure")}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={pathname.startsWith("/workers")}
+                  tooltip={t("workers.title")}
+                  render={<Link href="/workers" onClick={closeMobileSidebar} />}
+                >
+                  <Cpu />
+                  <span>{t("workers.title")}</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
                   isActive={pathname.startsWith("/storage")}

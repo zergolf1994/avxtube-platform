@@ -15,6 +15,7 @@ import {
   numberValue,
   plainText,
   publicVideoFilter,
+  contentChannelFilter,
   stringArray,
   stringValue,
   toRecord,
@@ -34,37 +35,6 @@ export function channelPagePipeline(
     { $sort: { createdAt: -1, _id: -1 } },
     { $skip: offset },
     { $limit: limit },
-    {
-      $lookup: {
-        from: ContentModel.collection.name,
-        let: { channelId: "$_id" },
-        pipeline: [
-          {
-            $match: {
-              $expr: {
-                $or: [
-                  { $in: ["$$channelId", { $ifNull: ["$studioIds", []] }] },
-                  { $in: ["$$channelId", { $ifNull: ["$actressIds", []] }] },
-                  { $in: ["$$channelId", { $ifNull: ["$actorIds", []] }] },
-                  { $in: ["$$channelId", { $ifNull: ["$directorIds", []] }] },
-                  { $in: ["$$channelId", { $ifNull: ["$channelIds", []] }] },
-                ],
-              },
-              ...publicVideoFilter(),
-              kind: { $in: ["video", "short", "post"] },
-            },
-          },
-          {
-            $group: {
-              _id: "$kind",
-              count: { $sum: 1 },
-              views: { $sum: "$stats.viewCount" },
-            },
-          },
-        ],
-        as: "contentStats",
-      },
-    },
     {
       $project: {
         name: 1,
@@ -99,7 +69,64 @@ export function getPublicChannels(
 ) {
   return ChannelModel.aggregate<Record<string, unknown>>(
     channelPagePipeline(filter, limit, offset)
-  ).exec()
+  )
+    .exec()
+    .then(async (rows) => {
+      const channelIds = rows.map((row) => stringValue(row._id)).filter(Boolean)
+      if (!channelIds.length) return rows
+
+      // Calculate statistics for the whole channel page in one indexed content
+      // query. The former correlated $lookup scanned contents once per channel
+      // (100 scans on /actors), which stopped scaling as the catalogue grew.
+      const stats = await ContentModel.aggregate<{
+        _id: { channelId: string; kind: string }
+        count: number
+        views: number
+      }>([
+        {
+          $match: {
+            ...publicVideoFilter(),
+            kind: { $in: ["video", "short", "post"] },
+            ...contentChannelFilter(channelIds),
+          },
+        },
+        {
+          $project: {
+            kind: 1,
+            views: { $ifNull: ["$stats.viewCount", 0] },
+            relationIds: {
+              $setUnion: [
+                { $ifNull: ["$studioIds", []] },
+                { $ifNull: ["$actressIds", []] },
+                { $ifNull: ["$actorIds", []] },
+                { $ifNull: ["$directorIds", []] },
+                { $ifNull: ["$channelIds", []] },
+              ],
+            },
+          },
+        },
+        { $unwind: "$relationIds" },
+        { $match: { relationIds: { $in: channelIds } } },
+        {
+          $group: {
+            _id: { channelId: "$relationIds", kind: "$kind" },
+            count: { $sum: 1 },
+            views: { $sum: "$views" },
+          },
+        },
+      ]).exec()
+      const statsByChannel = new Map<string, Array<Record<string, unknown>>>()
+      for (const item of stats) {
+        const channelId = stringValue(item._id?.channelId)
+        const list = statsByChannel.get(channelId) ?? []
+        list.push({ _id: item._id?.kind, count: item.count, views: item.views })
+        statsByChannel.set(channelId, list)
+      }
+      return rows.map((row) => ({
+        ...row,
+        contentStats: statsByChannel.get(stringValue(row._id)) ?? [],
+      }))
+    })
 }
 
 export function mapChannel(row: Record<string, unknown>): Channel {
@@ -136,16 +163,15 @@ export function mapChannel(row: Record<string, unknown>): Channel {
     country: stringValue(row.country) || null,
     verified: Boolean(row.verifiedAt),
     subscriberCount: numberValue(toRecord(row.stats).subscriberCount),
-    videoCount: numberValue(
-      contentStats.find((item) => item._id === "video")?.count
-    ),
-    shortCount: numberValue(
-      contentStats.find((item) => item._id === "short")?.count
-    ),
-    viewCount: contentStats.reduce(
-      (sum, item) => sum + numberValue(item.views),
-      0
-    ),
+    videoCount:
+      numberValue(contentStats.find((item) => item._id === "video")?.count) ||
+      numberValue(toRecord(row.stats).videoCount),
+    shortCount:
+      numberValue(contentStats.find((item) => item._id === "short")?.count) ||
+      numberValue(toRecord(row.stats).shortCount),
+    viewCount:
+      contentStats.reduce((sum, item) => sum + numberValue(item.views), 0) ||
+      numberValue(toRecord(row.stats).viewCount),
     joinedAt: dateValue(row.createdAt),
     isFollowing: false,
     links,

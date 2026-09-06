@@ -23,6 +23,7 @@ import adminStoragesRoutes from "./admin-storages.routes"
 import adminMediaRoutes from "./admin-media.routes"
 import adminSettingsRoutes from "./admin-settings.routes"
 import adminImportsRoutes from "./admin-imports.routes"
+import adminWorkersRoutes from "./admin-workers.routes"
 import mediaRoutes from "./media.routes"
 import sitemapRoutes from "./sitemap.routes"
 
@@ -49,6 +50,7 @@ router.use("/admin/storages", adminStoragesRoutes)
 router.use("/admin/media", adminMediaRoutes)
 router.use("/admin/settings", adminSettingsRoutes)
 router.use("/admin/imports", adminImportsRoutes)
+router.use("/admin/workers", adminWorkersRoutes)
 router.use("/media", mediaRoutes)
 router.use("/sitemap", sitemapRoutes)
 

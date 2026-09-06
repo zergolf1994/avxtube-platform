@@ -10,6 +10,7 @@ import type {
 } from "./content"
 import type { AdminStorage } from "./storage"
 import type { QueueImportListResponse, QueueImportStatus } from "./queue-import"
+import type { AdminWorkersResponse } from "./worker"
 import type {
   AdminChannel,
   AdminChannelKind,
@@ -103,6 +104,10 @@ export async function getQueueImports({
   if (status) url.searchParams.set("status", status)
   if (query) url.searchParams.set("q", query)
   return fetchAdmin<QueueImportListResponse>(url)
+}
+
+export async function getAdminWorkers(): Promise<AdminWorkersResponse> {
+  return fetchAdmin<AdminWorkersResponse>(new URL("/v1/admin/workers", apiUrl))
 }
 
 export async function getAdminTerms({
