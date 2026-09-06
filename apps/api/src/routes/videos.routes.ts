@@ -14,6 +14,7 @@ import {
   normalizeContentLocale,
   publicVideoFilter,
   publicVideoListFilter,
+  resolveCategoryId,
   stringValue,
   numberValue,
   toRecord,
@@ -59,8 +60,30 @@ router.get("/", async (req: Request, res: Response, next: NextFunction) => {
     const sort: Record<string, 1 | -1> =
       req.query.sort === "trending"
         ? { "stats.viewCount": -1, createdAt: -1, _id: -1 }
-        : { createdAt: -1, _id: -1 }
+        : req.query.sort === "releaseDate"
+          ? { "metadata.releaseDate": -1, _id: -1 }
+          : { createdAt: -1, _id: -1 }
     const filter = publicVideoListFilter(req.query.sort)
+    const requestedCategory =
+      typeof req.query.category === "string" ? req.query.category : "all"
+    const categoryId = await resolveCategoryId(requestedCategory)
+    if (categoryId === null) {
+      res
+        .status(200)
+        .json(
+          paginated
+            ? { items: [], nextCursor: null, total: 0 }
+            : { videos: [], total: 0 }
+        )
+      return
+    }
+    if (categoryId) filter.termIds = categoryId
+    if (req.query.actress === "single") {
+      filter["actressIds.0"] = { $exists: true }
+      filter["actressIds.1"] = { $exists: false }
+    } else if (req.query.actress === "multiple") {
+      filter["actressIds.1"] = { $exists: true }
+    }
     const [contents, total, { mapVideo }] = await Promise.all([
       getPublicContents(filter, limit, cursor, sort),
       ContentModel.countDocuments(filter),

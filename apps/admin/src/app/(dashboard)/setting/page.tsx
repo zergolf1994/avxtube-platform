@@ -1,5 +1,13 @@
 import Link from "next/link"
-import { ArrowRight, Bot, Globe, Megaphone, Settings } from "lucide-react"
+import {
+  ArrowRight,
+  Bot,
+  Globe,
+  LayoutList,
+  Megaphone,
+  Search,
+  Settings,
+} from "lucide-react"
 import { getTranslations } from "next-intl/server"
 import {
   Card,
@@ -28,9 +36,13 @@ export default async function SettingsPage() {
           const Icon =
             group.id === "adverts"
               ? Megaphone
-              : group.id === "workerScraper"
-                ? Bot
-                : Globe
+              : group.id === "seo"
+                ? Search
+                : group.id === "homeFeed"
+                  ? LayoutList
+                  : group.id === "workerScraper"
+                    ? Bot
+                    : Globe
           return (
             <Link
               key={group.id}

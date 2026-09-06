@@ -6,6 +6,15 @@
   "infrastructure": "โครงสร้างพื้นฐาน",
   "overview": "ภาพรวมเนื้อหา",
   "overviewDescription": "เพิ่ม ตรวจสอบ และปรับปรุงเนื้อหาทุกประเภทจากพื้นที่เดียว",
+  "hourlyStats": {
+    "title": "Contents ที่เพิ่มรายชั่วโมง",
+    "description": "นับจากเวลาสร้าง Contents ตามเวลาเอเชีย/กรุงเทพฯ ครบทุกชั่วโมงตั้งแต่ 00:00–23:59",
+    "date": "วันที่ (กรุงเทพฯ)",
+    "time": "เวลา (กรุงเทพฯ)",
+    "contents": "สัดส่วน Contents",
+    "total": "Contents ทั้งวัน",
+    "currentHour": "Contents ในชั่วโมงปัจจุบัน (กรุงเทพฯ)"
+  },
   "manage": "จัดการ{kind}",
   "manageDescription": "ดูและปรับปรุงรายการ{kind}ทั้งหมดในระบบ",
   "new": "เพิ่ม{kind}",
@@ -475,6 +484,89 @@
     "adverts": {
       "title": "โฆษณา",
       "description": "ตั้งค่าและจัดลำดับโฆษณาวิดีโอ รูปภาพ และสคริปต์"
+    },
+    "seo": {
+      "title": "SEO",
+      "description": "ตั้งค่า Metadata สำหรับการค้นหาแยกตามทุกภาษาที่เว็บไซต์รองรับ",
+      "fieldsTitle": "Metadata แยกตามภาษา",
+      "siteName": "ชื่อเว็บไซต์",
+      "metaTitle": "ชื่อหน้าหลัก",
+      "metaDescription": "คำอธิบาย Meta",
+      "keywords": "คีย์เวิร์ด",
+      "keywordsPlaceholder": "วิดีโอ, บันเทิง, สตรีมมิง",
+      "keywordsHelp": "คั่นแต่ละคำด้วยเครื่องหมายจุลภาคหรือขึ้นบรรทัดใหม่ บันทึกได้สูงสุด 50 คำต่อภาษา",
+      "saved": "บันทึกการตั้งค่า SEO แล้ว"
+    },
+    "homeFeed": {
+      "title": "ฟีดหน้าแรก",
+      "description": "เลือกฟีดที่จะแสดงบนหน้าแรกและจัดลำดับการแสดงผล",
+      "orderTitle": "ส่วนต่างๆ บนหน้าแรก",
+      "orderHelp": "ลากแต่ละส่วนเพื่อสลับลำดับ ส่วนที่ปิดจะยังเก็บค่าไว้แต่ไม่แสดงบนหน้าแรก",
+      "drag": "ลาก {name}",
+      "toggle": "แสดงหรือซ่อน {name}",
+      "saved": "บันทึกการตั้งค่าฟีดหน้าแรกแล้ว",
+      "add": "เพิ่ม Feed",
+      "summary": "ทั้งหมด {total} Feed · เปิดใช้งาน {active}",
+      "delete": "ลบ Feed",
+      "deleteConfirm": "ต้องการลบ Feed “{name}” หรือไม่?",
+      "empty": "ยังไม่มี Feed กดเพิ่ม Feed เพื่อเริ่มตั้งค่า",
+      "active": "แสดงบนหน้าแรก",
+      "disabled": "ซ่อนจากหน้าแรก",
+      "cardDescription": "ลำดับ {index} · {category}",
+      "feedTitle": "หัวข้อกำหนดเอง",
+      "feedTitlePlaceholder": "เว้นว่างเพื่อใช้หัวข้ออัตโนมัติ",
+      "feedType": "ประเภท Feed",
+      "category": "หมวดหมู่",
+      "allCategories": "ทุกหมวดหมู่",
+      "searchCategories": "ค้นหาหมวดหมู่…",
+      "noCategories": "ไม่พบหมวดหมู่",
+      "categoriesSelected": "หมวดหมู่ที่เลือก",
+      "showLess": "แสดงน้อยลง",
+      "viewAll": "ดูทั้งหมด",
+      "viewAllButton": "ปุ่มดูทั้งหมด",
+      "viewAllEnabled": "แสดงปุ่ม",
+      "viewAllDisabled": "ซ่อนปุ่ม",
+      "viewAllHref": "ลิงก์ปลายทาง",
+      "viewAllHrefPlaceholder": "/release, /latest, /trending หรือ /shorts",
+      "sort": "การเรียงลำดับ",
+      "pageSize": "จำนวนรายการต่อหน้า",
+      "startPage": "เริ่มจากหน้าที่",
+      "loadMore": "รูปแบบการโหลดเพิ่ม",
+      "maxPages": "จำนวนหน้าสูงสุด",
+      "unlimited": "ไม่จำกัด",
+      "types": {
+        "videos": "วิดีโอ",
+        "shorts": "Shorts",
+        "playlists": "เพลย์ลิสต์"
+      },
+      "sorts": {
+        "latest": "ใหม่ล่าสุดก่อน",
+        "releaseDate": "วันวางจำหน่ายล่าสุด",
+        "trending": "ยอดดูมากที่สุด"
+      },
+      "loadModes": {
+        "none": "ไม่โหลดเพิ่ม",
+        "button": "ปุ่มโหลดเพิ่ม",
+        "auto": "โหลดอัตโนมัติเมื่อเลื่อนถึง"
+      },
+      "sections": {
+        "videos": {
+          "title": "ฟีดวิดีโอ",
+          "description": "ตารางวิดีโอชุดแรกใต้ตัวกรองหมวดหมู่"
+        },
+        "playlists": {
+          "title": "เพลย์ลิสต์",
+          "description": "แถบเพลย์ลิสต์แนะนำ"
+        },
+        "shorts": {
+          "title": "Shorts",
+          "description": "แถบวิดีโอสั้นแนวนอน"
+        },
+        "latestVideos": {
+          "title": "วิดีโอล่าสุด",
+          "description": "ตารางวิดีโอล่าสุดส่วนเพิ่มเติมและลิงก์ดูทั้งหมด"
+        }
+      }
     },
     "workerScraper": {
       "title": "Worker Scraper",

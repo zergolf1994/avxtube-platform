@@ -21,6 +21,7 @@ type PageMetadata = {
   image?: string | null
   video?: string | null
   openGraphType?: "website" | "profile" | "video.other"
+  siteName?: string
 }
 
 export type LocalizedPageProps = {
@@ -45,6 +46,7 @@ export async function createPageMetadata({
   image,
   video,
   openGraphType = "website",
+  siteName = "AVXTUBE",
 }: PageMetadata): Promise<Metadata> {
   const translate = await getContentTranslator(locale)
 
@@ -68,7 +70,7 @@ export async function createPageMetadata({
     openGraph: {
       type: openGraphType,
       url: localizedPath,
-      siteName: "AVXTUBE",
+      siteName,
       locale: localeTags[locale].replace("-", "_"),
       title: localizedTitle,
       description: localizedDescription,

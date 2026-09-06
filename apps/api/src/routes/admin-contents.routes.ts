@@ -22,6 +22,55 @@ const router: Router = Router()
 
 router.use(authenticateUser, requireAdmin)
 
+router.get(
+  "/stats/hourly",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const date = bangkokDateInput(req.query.date)
+      const start = new Date(`${date}T00:00:00.000+07:00`)
+      const end = new Date(start)
+      end.setTime(end.getTime() + 24 * 60 * 60 * 1_000)
+      const grouped = await ContentModel.aggregate<{
+        _id: number
+        count: number
+      }>([
+        {
+          $match: {
+            createdAt: { $gte: start, $lt: end },
+            deletedAt: { $exists: false },
+          },
+        },
+        {
+          $group: {
+            _id: {
+              $hour: { date: "$createdAt", timezone: "Asia/Bangkok" },
+            },
+            count: { $sum: 1 },
+          },
+        },
+        { $sort: { _id: 1 } },
+      ]).exec()
+      const counts = new Map(grouped.map((item) => [item._id, item.count]))
+      const hours = Array.from({ length: 24 }, (_, hour) => ({
+        hour,
+        count: counts.get(hour) ?? 0,
+      }))
+      const bangkokNow = new Date(Date.now() + 7 * 60 * 60 * 1_000)
+
+      res.status(200).json({
+        date,
+        timeZone: "Asia/Bangkok",
+        currentDate: bangkokNow.toISOString().slice(0, 10),
+        currentHour: bangkokNow.getUTCHours(),
+        total: hours.reduce((sum, item) => sum + item.count, 0),
+        hours,
+      })
+    } catch (error) {
+      next(error)
+    }
+  }
+)
+
 router.get("/", async (req: Request, res: Response, next: NextFunction) => {
   try {
     const kind = optionalEnum(req.query.kind, CONTENT_KINDS)
@@ -365,6 +414,21 @@ function positiveInteger(value: unknown, fallback: number) {
   if (typeof value !== "string") return fallback
   const parsed = Number.parseInt(value, 10)
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+function bangkokDateInput(value: unknown) {
+  const fallback = bangkokDate()
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value))
+    return fallback
+  const date = new Date(`${value}T00:00:00.000Z`)
+  return Number.isNaN(date.getTime()) ||
+    date.toISOString().slice(0, 10) !== value
+    ? fallback
+    : value
+}
+
+function bangkokDate() {
+  return new Date(Date.now() + 7 * 60 * 60 * 1_000).toISOString().slice(0, 10)
 }
 
 function escapeRegExp(value: string) {

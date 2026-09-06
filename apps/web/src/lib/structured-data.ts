@@ -55,6 +55,46 @@ export function videoStructuredData(video: Video, pageUrl: string) {
   })
 }
 
+export function websiteStructuredData({
+  pageUrl,
+  siteName,
+  description,
+  language,
+}: {
+  pageUrl: string
+  siteName: string
+  description?: string
+  language: string
+}) {
+  const organizationId = `${absoluteUrl("/")}#organization`
+  const websiteId = `${pageUrl}#website`
+
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      compact({
+        "@type": "Organization",
+        "@id": organizationId,
+        name: siteName,
+        url: absoluteUrl("/"),
+        logo: {
+          "@type": "ImageObject",
+          url: absoluteUrl("/favicon.png"),
+        },
+      }),
+      compact({
+        "@type": "WebSite",
+        "@id": websiteId,
+        url: pageUrl,
+        name: siteName,
+        description,
+        inLanguage: language,
+        publisher: { "@id": organizationId },
+      }),
+    ],
+  }
+}
+
 export function channelStructuredData(channel: Channel, pageUrl: string) {
   const type =
     channel.kind === "person"

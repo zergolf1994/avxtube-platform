@@ -135,6 +135,7 @@
     }
   },
   "home": {
+    "videos": "Videos",
     "categories": {
       "all": "All",
       "travel": "Travel",
@@ -183,6 +184,25 @@
     "title": "Latest videos",
     "description": "Browse recently published videos, ordered from newest to oldest.",
     "empty": "No published videos are available right now."
+  },
+  "release": {
+    "eyebrow": "Release library",
+    "title": "Release videos",
+    "description": "Browse videos by their release date.",
+    "filter": "Filter",
+    "all": "All",
+    "singleActress": "Solo actress",
+    "multipleActresses": "Multiple actresses",
+    "resultCount": "{count} videos",
+    "results": "Videos",
+    "pageStatus": "Page {page} of {total}",
+    "sort": "Sort by",
+    "sorts": {
+      "releaseDate": "Release date",
+      "latest": "Recently added",
+      "trending": "Total views"
+    },
+    "empty": "No videos match this filter."
   },
   "following": {
     "title": "Following",
@@ -330,6 +350,14 @@
     "resultCount": "{count} results",
     "filters": "Filters",
     "filterTitle": "Search filters",
+    "searchPlaceholder": "Search videos, performers or studios",
+    "searchAction": "Search",
+    "clearFilters": "Clear filters",
+    "applyFilters": "Apply filters",
+    "removeFilter": "Remove {filter}",
+    "any": "Any",
+    "releaseDateLabel": "Released {date}",
+    "addedDateLabel": "Added {date}",
     "actors": "Actors and studios",
     "videos": "Videos",
     "emptyTitle": "No results found",
@@ -346,9 +374,10 @@
     "columns": {
       "type": "Type",
       "duration": "Duration",
-      "uploaded": "Upload date",
+      "uploaded": "Date added",
       "feature": "Features",
-      "sort": "Sort by"
+      "sort": "Sort by",
+      "watched": "Watch history"
     },
     "options": {
       "type": { "video": "Video", "short": "Shorts", "live": "Live" },
@@ -365,10 +394,14 @@
       },
       "feature": { "hd": "HD", "4k": "4K", "captions": "Captions" },
       "sort": {
-        "relevance": "Relevance",
-        "latest": "Upload date",
-        "views": "View count"
-      }
+        "relevance": "Default order",
+        "latest": "Recently added",
+        "oldest": "Oldest added",
+        "release": "Release date: newest",
+        "release-oldest": "Release date: oldest",
+        "views": "Most viewed (all time)"
+      },
+      "watched": { "watched": "Watched", "unwatched": "Unwatched" }
     }
   }
 }

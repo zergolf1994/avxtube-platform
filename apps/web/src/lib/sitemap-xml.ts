@@ -48,6 +48,7 @@ export function staticPagesSitemapXml(lastModified?: string) {
     [
       { path: "/", changeFrequency: "daily", priority: 1 },
       { path: "/latest", changeFrequency: "daily", priority: 0.9 },
+      { path: "/release", changeFrequency: "daily", priority: 0.9 },
       { path: "/trending", changeFrequency: "daily", priority: 0.9 },
       { path: "/actors", changeFrequency: "weekly", priority: 0.8 },
     ],

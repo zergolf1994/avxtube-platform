@@ -1,4 +1,5 @@
 import { Router, type NextFunction, type Request, type Response } from "express"
+import { mockPlaylists } from "../data/mock-playlists"
 
 import {
   getPublicVideoCategories,
@@ -76,5 +77,86 @@ router.get("/", async (req: Request, res: Response, next: NextFunction) => {
     next(error)
   }
 })
+
+router.get("/feed", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const type =
+      req.query.type === "shorts" || req.query.type === "playlists"
+        ? req.query.type
+        : "videos"
+    const page = positiveInteger(req.query.page, 1, 100_000)
+    const pageSize = positiveInteger(req.query.pageSize, 12, 48)
+    const start = (page - 1) * pageSize
+    res.setHeader(
+      "Cache-Control",
+      "public, max-age=10, stale-while-revalidate=30"
+    )
+
+    if (type === "playlists") {
+      const items = mockPlaylists.slice(start, start + pageSize)
+      res.json({
+        type,
+        page,
+        items,
+        nextPage: start + items.length < mockPlaylists.length ? page + 1 : null,
+      })
+      return
+    }
+
+    const requestedCategories = queryStrings(req.query.category).filter(
+      (category) => category !== "all"
+    )
+    const resolvedCategories = await Promise.all(
+      requestedCategories.map(resolveCategoryId)
+    )
+    if (resolvedCategories.some((categoryId) => categoryId === null)) {
+      res.json({ type, page, items: [], nextPage: null })
+      return
+    }
+    const filter: Record<string, unknown> = publicVideoFilter(
+      type === "shorts" ? "short" : "video"
+    )
+    const categoryIds = resolvedCategories.filter(
+      (categoryId): categoryId is string => Boolean(categoryId)
+    )
+    if (categoryIds.length) filter.termIds = { $in: categoryIds }
+    const sort: Record<string, 1 | -1> =
+      req.query.sort === "trending"
+        ? { "stats.viewCount": -1, createdAt: -1, _id: -1 }
+        : req.query.sort === "releaseDate"
+          ? { "metadata.releaseDate": -1, _id: -1 }
+          : { createdAt: -1, _id: -1 }
+    const locale = normalizeContentLocale(req.query.locale)
+    const [{ mapVideo, mapShort }, rows] = await Promise.all([
+      getContentMappers(locale),
+      getPublicContents(filter, pageSize + 1, start, sort),
+    ])
+    const hasMore = rows.length > pageSize
+    const mapper = type === "shorts" ? mapShort : mapVideo
+    res.json({
+      type,
+      page,
+      items: rows.slice(0, pageSize).map(mapper),
+      nextPage: hasMore ? page + 1 : null,
+    })
+  } catch (error) {
+    next(error)
+  }
+})
+
+function positiveInteger(value: unknown, fallback: number, maximum: number) {
+  const parsed = Number.parseInt(typeof value === "string" ? value : "", 10)
+  return Number.isSafeInteger(parsed) && parsed > 0
+    ? Math.min(parsed, maximum)
+    : fallback
+}
+
+function queryStrings(value: unknown) {
+  const values = Array.isArray(value) ? value : [value]
+  return values
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
 
 export default router

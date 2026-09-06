@@ -6,6 +6,15 @@
   "infrastructure": "Infrastructure",
   "overview": "Content overview",
   "overviewDescription": "Create, review and update every content type from one workspace.",
+  "hourlyStats": {
+    "title": "Contents added by hour",
+    "description": "Counts content creation in Asia/Bangkok for every hour from 00:00–23:59.",
+    "date": "Date (Bangkok)",
+    "time": "Time (Bangkok)",
+    "contents": "Content share",
+    "total": "Contents today",
+    "currentHour": "Contents this hour (Bangkok)"
+  },
   "manage": "Manage {kind}",
   "manageDescription": "Browse and maintain all {kind} content.",
   "new": "New {kind}",
@@ -475,6 +484,89 @@
     "adverts": {
       "title": "Advertisements",
       "description": "Configure and reorder video, image and script advertisements."
+    },
+    "seo": {
+      "title": "SEO",
+      "description": "Configure search metadata separately for every supported language.",
+      "fieldsTitle": "Localized search metadata",
+      "siteName": "Site name",
+      "metaTitle": "Homepage title",
+      "metaDescription": "Meta description",
+      "keywords": "Keywords",
+      "keywordsPlaceholder": "video, entertainment, streaming",
+      "keywordsHelp": "Separate keywords with commas or new lines. Up to 50 keywords are stored per language.",
+      "saved": "SEO settings saved."
+    },
+    "homeFeed": {
+      "title": "Home feed",
+      "description": "Choose which feeds appear on the homepage and arrange their display order.",
+      "orderTitle": "Homepage sections",
+      "orderHelp": "Drag sections to reorder them. Disabled sections remain saved but are hidden from the homepage.",
+      "drag": "Drag {name}",
+      "toggle": "Show or hide {name}",
+      "saved": "Home feed settings saved.",
+      "add": "Add feed",
+      "summary": "{total} feeds · {active} active",
+      "delete": "Delete feed",
+      "deleteConfirm": "Delete feed “{name}”?",
+      "empty": "No feeds configured. Add a feed to begin.",
+      "active": "Visible on homepage",
+      "disabled": "Hidden from homepage",
+      "cardDescription": "Position {index} · {category}",
+      "feedTitle": "Custom heading",
+      "feedTitlePlaceholder": "Leave blank to use the automatic heading",
+      "feedType": "Feed type",
+      "category": "Category",
+      "allCategories": "All categories",
+      "searchCategories": "Search categories…",
+      "noCategories": "No categories found.",
+      "categoriesSelected": "categories selected",
+      "showLess": "Show less",
+      "viewAll": "View all",
+      "viewAllButton": "View-all button",
+      "viewAllEnabled": "Show button",
+      "viewAllDisabled": "Hide button",
+      "viewAllHref": "View-all destination",
+      "viewAllHrefPlaceholder": "/release, /latest, /trending or /shorts",
+      "sort": "Sort order",
+      "pageSize": "Items per page",
+      "startPage": "Start at page",
+      "loadMore": "Load more behavior",
+      "maxPages": "Maximum pages",
+      "unlimited": "Unlimited",
+      "types": {
+        "videos": "Videos",
+        "shorts": "Shorts",
+        "playlists": "Playlists"
+      },
+      "sorts": {
+        "latest": "Latest first",
+        "releaseDate": "Newest release date",
+        "trending": "Most viewed"
+      },
+      "loadModes": {
+        "none": "Do not load more",
+        "button": "Load more button",
+        "auto": "Load automatically on scroll"
+      },
+      "sections": {
+        "videos": {
+          "title": "Video feed",
+          "description": "The first video grid shown below the category filters."
+        },
+        "playlists": {
+          "title": "Playlists",
+          "description": "Featured playlist shelf."
+        },
+        "shorts": {
+          "title": "Shorts",
+          "description": "Horizontal shelf of short videos."
+        },
+        "latestVideos": {
+          "title": "Latest videos",
+          "description": "The additional latest-video grid and View all link."
+        }
+      }
     },
     "workerScraper": {
       "title": "Worker scraper",

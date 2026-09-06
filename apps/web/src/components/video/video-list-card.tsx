@@ -10,10 +10,14 @@ export function VideoListCard({
   video,
   viewsLabel,
   action,
+  variant = "default",
+  publishedLabel,
 }: {
   video: Video
   viewsLabel: string
   action?: React.ReactNode
+  variant?: "default" | "search"
+  publishedLabel?: string
 }) {
   const previewRef = React.useRef<HTMLVideoElement>(null)
   const [previewActive, setPreviewActive] = React.useState(false)
@@ -42,12 +46,20 @@ export function VideoListCard({
         setPreviewPlaying(false)
         setPreviewActive(false)
       }}
-      className="group block bg-background sm:flex sm:gap-3"
+      className={
+        variant === "search"
+          ? "group grid grid-cols-[112px_minmax(0,1fr)] items-start gap-3 bg-background py-4 min-[400px]:grid-cols-[136px_minmax(0,1fr)] sm:grid-cols-[240px_minmax(0,1fr)] sm:gap-5 sm:py-5"
+          : "group block bg-background sm:flex sm:gap-3"
+      }
     >
       <Link
         href={`/watch/${video.id}`}
         aria-label={video.title}
-        className="relative block aspect-video w-full shrink-0 overflow-hidden bg-muted sm:w-40 sm:rounded-lg"
+        className={
+          variant === "search"
+            ? "relative block aspect-video w-full overflow-hidden rounded-lg bg-muted sm:rounded-xl"
+            : "relative block aspect-video w-full shrink-0 overflow-hidden bg-muted sm:w-40 sm:rounded-lg"
+        }
       >
         <img
           src={video.thumbnailUrl || undefined}
@@ -55,7 +67,7 @@ export function VideoListCard({
           loading="lazy"
           className={`size-full object-cover transition-[transform,opacity] duration-200 group-hover:scale-105 ${previewPlaying ? "opacity-0" : "opacity-100"}`}
         />
-        {canPreview ? (
+        {canPreview && previewActive ? (
           <video
             ref={previewRef}
             src={video.previewUrl}
@@ -63,7 +75,6 @@ export function VideoListCard({
             loop
             playsInline
             preload="none"
-            poster={video.thumbnailUrl}
             aria-hidden="true"
             onPlaying={() => setPreviewPlaying(true)}
             onError={() => {
@@ -78,10 +89,22 @@ export function VideoListCard({
           {formatDuration(video.durationSeconds)}
         </span>
       </Link>
-      <div className="flex min-w-0 flex-1 items-start gap-2 p-3 sm:p-0">
+      <div
+        className={
+          variant === "search"
+            ? "flex min-w-0 items-start gap-2"
+            : "flex min-w-0 flex-1 items-start gap-2 p-3 sm:p-0"
+        }
+      >
         <div className="min-w-0 flex-1">
           <Link href={`/watch/${video.id}`}>
-            <h3 className="line-clamp-2 text-sm font-semibold group-hover:text-primary">
+            <h3
+              className={
+                variant === "search"
+                  ? "line-clamp-3 text-sm leading-snug font-semibold group-hover:text-primary sm:line-clamp-2 sm:text-lg"
+                  : "line-clamp-2 text-sm font-semibold group-hover:text-primary"
+              }
+            >
               {video.title}
             </h3>
           </Link>
@@ -94,6 +117,16 @@ export function VideoListCard({
             </Link>
           ) : null}
           <p className="text-xs text-muted-foreground">{viewsLabel}</p>
+          {publishedLabel ? (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {publishedLabel}
+            </p>
+          ) : null}
+          {variant === "search" && video.description ? (
+            <p className="mt-3 hidden text-sm leading-relaxed text-muted-foreground sm:line-clamp-2">
+              {video.description}
+            </p>
+          ) : null}
         </div>
         {action}
       </div>

@@ -1,108 +1,126 @@
-import "server-only";
+import "server-only"
 
-import { DEFAULT_AUTH_SETTING } from "@workspace/core/config";
-import type { AdvertSettings } from "@workspace/core/validators";
-import { cache } from "react";
+import { DEFAULT_AUTH_SETTING } from "@workspace/core/config"
+import type {
+  AdvertSettings,
+  HomeFeedSettings,
+  SeoSettings,
+} from "@workspace/core/validators"
+import { cache } from "react"
 
 type KnownSettings = {
-    auth_setting: typeof DEFAULT_AUTH_SETTING;
-    advert_hobby: AdvertSettings;
-};
+  auth_setting: typeof DEFAULT_AUTH_SETTING
+  advert_hobby: AdvertSettings
+  seo_setting: SeoSettings
+  home_feed_setting: HomeFeedSettings
+}
 
-type Settings = Record<string, unknown>;
+type Settings = Record<string, unknown>
 
 type SettingsByNames<Names extends readonly string[]> = {
-    [Name in Names[number]]?: Name extends keyof KnownSettings
-        ? KnownSettings[Name]
-        : unknown;
-};
+  [Name in Names[number]]?: Name extends keyof KnownSettings
+    ? KnownSettings[Name]
+    : unknown
+}
 
 type SettingResponse = {
-    setting: unknown;
-};
+  setting: unknown
+}
 
 type SettingsResponse = {
-    settings: Settings;
-};
+  settings: Settings
+}
 
-const apiOrigin = process.env.API_INTERNAL_URL ?? "http://localhost:4000";
-const apiVersion = process.env.API_VERSION ?? "v1";
+const apiOrigin = process.env.API_INTERNAL_URL ?? "http://localhost:4000"
+const apiVersion = process.env.API_VERSION ?? "v1"
 
 function createSettingsApiUrl(path = ""): URL {
-    return new URL(`/${apiVersion}/settings${path}`, apiOrigin);
+  return new URL(`/${apiVersion}/settings${path}`, apiOrigin)
 }
 
 async function fetchJson<ResponseBody>(url: URL): Promise<ResponseBody> {
-    const response = await fetch(url, {
-        method: "GET",
-        headers: { accept: "application/json" },
-        cache: "no-store",
-    });
+  const response = await fetch(url, {
+    method: "GET",
+    headers: { accept: "application/json" },
+    cache: "no-store",
+  })
 
-    if (!response.ok) {
-        throw new Error(`Settings API returned ${response.status} ${response.statusText}`);
-    }
+  if (!response.ok) {
+    throw new Error(
+      `Settings API returned ${response.status} ${response.statusText}`
+    )
+  }
 
-    return response.json() as Promise<ResponseBody>;
+  return response.json() as Promise<ResponseBody>
 }
 
-const getSettingCached = cache(async (name: string): Promise<unknown | null> => {
+const getSettingCached = cache(
+  async (name: string): Promise<unknown | null> => {
     try {
-        const response = await fetchJson<SettingResponse>(
-            createSettingsApiUrl(`/${encodeURIComponent(name)}`),
-        );
-        return response.setting;
+      const response = await fetchJson<SettingResponse>(
+        createSettingsApiUrl(`/${encodeURIComponent(name)}`)
+      )
+      return response.setting
     } catch (error) {
-        console.error(`[Settings] Failed to fetch "${name}"`, error);
-        return null;
+      console.error(`[Settings] Failed to fetch "${name}"`, error)
+      return null
     }
-});
+  }
+)
 
-const getSettingsByNamesCached = cache(async (serializedNames: string): Promise<Settings> => {
+const getSettingsByNamesCached = cache(
+  async (serializedNames: string): Promise<Settings> => {
     try {
-        const names = JSON.parse(serializedNames) as string[];
-        const url = createSettingsApiUrl();
+      const names = JSON.parse(serializedNames) as string[]
+      const url = createSettingsApiUrl()
 
-        for (const name of names) {
-            url.searchParams.append("names", name);
-        }
+      for (const name of names) {
+        url.searchParams.append("names", name)
+      }
 
-        const response = await fetchJson<SettingsResponse>(url);
-        return response.settings;
+      const response = await fetchJson<SettingsResponse>(url)
+      return response.settings
     } catch (error) {
-        console.error("[Settings] Failed to fetch settings by name", error);
-        return {};
+      console.error("[Settings] Failed to fetch settings by name", error)
+      return {}
     }
-});
+  }
+)
 
 const getSettingsCached = cache(async (): Promise<Settings> => {
-    try {
-        const response = await fetchJson<SettingsResponse>(createSettingsApiUrl());
-        return response.settings;
-    } catch (error) {
-        console.error("[Settings] Failed to fetch public settings", error);
-        return {};
-    }
-});
+  try {
+    const response = await fetchJson<SettingsResponse>(createSettingsApiUrl())
+    return response.settings
+  } catch (error) {
+    console.error("[Settings] Failed to fetch public settings", error)
+    return {}
+  }
+})
 
 /** Fetch one public setting from the API. */
 export async function getSetting<Name extends string>(
-    name: Name,
-): Promise<Name extends keyof KnownSettings ? KnownSettings[Name] | null : unknown | null> {
-    return getSettingCached(name) as Promise<
-        Name extends keyof KnownSettings ? KnownSettings[Name] | null : unknown | null
-    >;
+  name: Name
+): Promise<
+  Name extends keyof KnownSettings ? KnownSettings[Name] | null : unknown | null
+> {
+  return getSettingCached(name) as Promise<
+    Name extends keyof KnownSettings
+      ? KnownSettings[Name] | null
+      : unknown | null
+  >
 }
 
 /** Fetch selected public settings from the API. */
 export async function getSettingsByNames<const Names extends readonly string[]>(
-    names: Names,
+  names: Names
 ): Promise<SettingsByNames<Names>> {
-    const uniqueNames = [...new Set(names)].sort();
-    return getSettingsByNamesCached(JSON.stringify(uniqueNames)) as Promise<SettingsByNames<Names>>;
+  const uniqueNames = [...new Set(names)].sort()
+  return getSettingsByNamesCached(JSON.stringify(uniqueNames)) as Promise<
+    SettingsByNames<Names>
+  >
 }
 
 /** Fetch every public setting exposed by the API. */
 export async function getSettings(): Promise<Partial<KnownSettings>> {
-    return getSettingsCached() as Promise<Partial<KnownSettings>>;
+  return getSettingsCached() as Promise<Partial<KnownSettings>>
 }

@@ -239,4 +239,5 @@ export type SearchResponse = {
   actors: Actor[]
   playlists: Playlist[]
   total: number
+  contentTotal?: number
 }

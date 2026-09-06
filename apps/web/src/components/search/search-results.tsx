@@ -1,12 +1,12 @@
 import type { SearchResponse } from "@workspace/core/types"
 import type { Locale } from "@workspace/i18n/config"
-import { BadgeCheck } from "lucide-react"
+import { BadgeCheck, Clapperboard } from "lucide-react"
 import { getTranslations } from "next-intl/server"
 
 import { PlaylistShelf } from "@/components/home/playlist-shelf"
 import { ChannelImage } from "@/components/channel/channel-image"
 import { TrendingShortsCarousel } from "@/components/trending/trending-shorts-carousel"
-import { VideoListCard } from "@/components/video"
+import { VideoGrid } from "@/components/video"
 import { Link } from "@/i18n/navigation"
 
 export async function SearchResults({
@@ -14,7 +14,7 @@ export async function SearchResults({
   query,
   locale,
 }: {
-  result: SearchResponse
+  result: Omit<SearchResponse, "total">
   query: string
   locale: Locale
 }) {
@@ -60,21 +60,20 @@ export async function SearchResults({
       ) : null}
       {result.videos.length ? (
         <section className="py-6">
-          <h2 className="text-xl font-bold">{t("videos")}</h2>
-          <div className="mt-5 divide-y sm:space-y-4 sm:divide-y-0">
-            {result.videos.map((video) => (
-              <VideoListCard
-                key={video.id}
-                video={video}
-                viewsLabel={videoT("views", {
-                  count: Intl.NumberFormat(locale, {
-                    notation: "compact",
-                    maximumFractionDigits: 1,
-                  }).format(video.viewCount),
-                })}
-              />
-            ))}
+          <div className="mb-5 flex items-center gap-2">
+            <Clapperboard className="size-5 text-primary" />
+            <h2 className="text-lg font-bold">{t("videos")}</h2>
           </div>
+          <VideoGrid
+            videos={result.videos}
+            locale={locale}
+            labels={{
+              views: (count) => videoT("views", { count }),
+              published: (date) => videoT("published", { date }),
+              moreOptions: videoT("moreOptions"),
+              verified: videoT("verified"),
+            }}
+          />
         </section>
       ) : null}
       {result.shorts.length ? (

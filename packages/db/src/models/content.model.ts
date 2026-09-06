@@ -112,6 +112,7 @@ contentSchema.index({ actressIds: 1, kind: 1, status: 1 })
 contentSchema.index({ actorIds: 1, kind: 1, status: 1 })
 contentSchema.index({ directorIds: 1, kind: 1, status: 1 })
 contentSchema.index({ visibility: 1, status: 1 })
+contentSchema.index({ createdAt: -1 })
 // Public feeds page before joining channel/media/term references.
 contentSchema.index({
   kind: 1,
@@ -126,8 +127,25 @@ contentSchema.index({
   status: 1,
   visibility: 1,
   deletedAt: 1,
+  "metadata.releaseDate": -1,
+  _id: -1,
+})
+contentSchema.index({
+  kind: 1,
+  status: 1,
+  visibility: 1,
+  deletedAt: 1,
   "stats.viewCount": -1,
   createdAt: -1,
+  _id: -1,
+})
+contentSchema.index({
+  termIds: 1,
+  kind: 1,
+  status: 1,
+  visibility: 1,
+  deletedAt: 1,
+  "metadata.releaseDate": -1,
   _id: -1,
 })
 contentSchema.index({

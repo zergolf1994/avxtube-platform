@@ -135,6 +135,7 @@
     }
   },
   "home": {
+    "videos": "วิดีโอ",
     "categories": {
       "all": "ทั้งหมด",
       "travel": "ท่องเที่ยว",
@@ -183,6 +184,25 @@
     "title": "วิดีโอล่าสุด",
     "description": "ดูวิดีโอที่เผยแพร่ล่าสุด เรียงจากใหม่ไปเก่า",
     "empty": "ยังไม่มีวิดีโอที่เผยแพร่ในขณะนี้"
+  },
+  "release": {
+    "eyebrow": "คลังวิดีโอตามวันวางจำหน่าย",
+    "title": "วิดีโอตามวันวางจำหน่าย",
+    "description": "เลือกดูวิดีโอโดยเรียงตามวันวางจำหน่าย",
+    "filter": "ตัวกรอง",
+    "all": "ทั้งหมด",
+    "singleActress": "นักแสดงหญิงคนเดียว",
+    "multipleActresses": "นักแสดงหญิงหลายคน",
+    "resultCount": "{count} วิดีโอ",
+    "results": "รายการวิดีโอ",
+    "pageStatus": "หน้า {page} จาก {total}",
+    "sort": "เรียงโดย",
+    "sorts": {
+      "releaseDate": "วันที่วางจำหน่าย",
+      "latest": "เพิ่มล่าสุด",
+      "trending": "ยอดดูทั้งหมด"
+    },
+    "empty": "ไม่พบวิดีโอที่ตรงกับตัวกรองนี้"
   },
   "following": {
     "title": "การติดตาม",
@@ -330,6 +350,14 @@
     "resultCount": "พบ {count} รายการ",
     "filters": "ตัวกรอง",
     "filterTitle": "ตัวกรองการค้นหา",
+    "searchPlaceholder": "ค้นหาวิดีโอ นักแสดง หรือสตูดิโอ",
+    "searchAction": "ค้นหา",
+    "clearFilters": "ล้างตัวกรอง",
+    "applyFilters": "ใช้ตัวกรอง",
+    "removeFilter": "นำ {filter} ออก",
+    "any": "ไม่จำกัด",
+    "releaseDateLabel": "เผยแพร่ {date}",
+    "addedDateLabel": "เพิ่มเมื่อ {date}",
     "actors": "นักแสดงและ Studio",
     "videos": "วิดีโอ",
     "emptyTitle": "ไม่พบผลการค้นหา",
@@ -346,9 +374,10 @@
     "columns": {
       "type": "ประเภท",
       "duration": "ระยะเวลา",
-      "uploaded": "วันที่อัปโหลด",
+      "uploaded": "วันที่เพิ่มรายการ",
       "feature": "ฟีเจอร์",
-      "sort": "ให้ความสำคัญ"
+      "sort": "เรียงตาม",
+      "watched": "ประวัติการดู"
     },
     "options": {
       "type": { "video": "วิดีโอ", "short": "Shorts", "live": "ไลฟ์สด" },
@@ -365,10 +394,14 @@
       },
       "feature": { "hd": "HD", "4k": "4K", "captions": "คำบรรยาย" },
       "sort": {
-        "relevance": "ความเกี่ยวข้อง",
-        "latest": "วันที่อัปโหลด",
-        "views": "จำนวนการดู"
-      }
+        "relevance": "ลำดับเริ่มต้น",
+        "latest": "เพิ่มล่าสุด",
+        "oldest": "เพิ่มเก่าสุด",
+        "release": "วันเผยแพร่: ใหม่ไปเก่า",
+        "release-oldest": "วันเผยแพร่: เก่าไปใหม่",
+        "views": "ยอดดูสูงสุด (ทั้งหมด)"
+      },
+      "watched": { "watched": "ดูแล้ว", "unwatched": "ยังไม่ได้ดู" }
     }
   }
 }

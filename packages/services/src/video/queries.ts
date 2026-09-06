@@ -55,13 +55,15 @@ export async function getVideos(): Promise<VideosResponse> {
 export async function getVideosPage(
   cursor = 0,
   limit = 8,
-  sort?: "trending",
-  locale = "en"
+  sort?: "trending" | "releaseDate",
+  locale = "en",
+  actress = "all"
 ): Promise<CursorPage<Video>> {
   const url = createVideosApiUrl()
   url.searchParams.set("cursor", String(cursor))
   url.searchParams.set("limit", String(limit))
   if (sort) url.searchParams.set("sort", sort)
+  if (actress !== "all") url.searchParams.set("actress", actress)
   url.searchParams.set("locale", locale)
   return fetchJson<CursorPage<Video>>(url)
 }
@@ -230,11 +232,33 @@ export async function searchContent(
   params: Record<string, string>,
   locale = "en"
 ): Promise<SearchResponse> {
+  return fetchJson<SearchResponse>(createSearchUrl(params, locale))
+}
+
+function createSearchUrl(params: Record<string, string>, locale: string) {
   const url = new URL(`/${apiVersion}/search`, apiOrigin)
   for (const [key, value] of Object.entries(params))
     if (value) url.searchParams.set(key, value)
   url.searchParams.set("locale", locale)
-  return fetchJson<SearchResponse>(url)
+  return url
+}
+
+export async function searchContentResults(
+  params: Record<string, string>,
+  locale = "en"
+): Promise<Omit<SearchResponse, "total"> & { total?: number }> {
+  const url = createSearchUrl(params, locale)
+  url.searchParams.set("part", "results")
+  return fetchJson(url)
+}
+
+export async function searchContentCount(
+  params: Record<string, string>,
+  locale = "en"
+): Promise<{ total: number; contentTotal?: number }> {
+  const url = createSearchUrl(params, locale)
+  url.searchParams.set("part", "count")
+  return fetchJson(url)
 }
 
 export async function getHomeFeed(

@@ -23,10 +23,29 @@ import type {
 import type {
   AdvertSettings,
   DomainSettings,
+  HomeFeedSettings,
+  SeoSettings,
   WorkerScraperSettings,
 } from "@workspace/core/validators"
 
 const apiUrl = process.env.API_INTERNAL_URL ?? "http://localhost:4000"
+
+export type HourlyContentStats = {
+  date: string
+  timeZone: "Asia/Bangkok"
+  currentDate: string
+  currentHour: number
+  total: number
+  hours: Array<{ hour: number; count: number }>
+}
+
+export async function getHourlyContentStats(
+  date: string
+): Promise<HourlyContentStats> {
+  const url = new URL("/v1/admin/contents/stats/hourly", apiUrl)
+  url.searchParams.set("date", date)
+  return fetchAdmin<HourlyContentStats>(url)
+}
 
 export async function getDomainSettings(): Promise<DomainSettings> {
   const result = await fetchAdmin<{ settings: DomainSettings }>(
@@ -47,6 +66,22 @@ export async function getWorkerScraperSettings(): Promise<WorkerScraperSettings>
     new URL("/v1/admin/settings/worker-scraper", apiUrl)
   )
   return result.settings
+}
+
+export async function getSeoSettings(): Promise<SeoSettings> {
+  const result = await fetchAdmin<{ settings: SeoSettings }>(
+    new URL("/v1/admin/settings/seo", apiUrl)
+  )
+  return result.settings
+}
+
+export async function getHomeFeedSettings(): Promise<{
+  settings: HomeFeedSettings
+  categories: string[]
+}> {
+  return fetchAdmin<{ settings: HomeFeedSettings; categories: string[] }>(
+    new URL("/v1/admin/settings/home-feed", apiUrl)
+  )
 }
 
 export async function getContents(

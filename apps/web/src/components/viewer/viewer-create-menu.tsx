@@ -1,6 +1,6 @@
 "use client"
 
-import { FilePenLine, Radio, Upload } from "lucide-react"
+import { FilePenLine, Upload } from "lucide-react"
 import { useTranslations } from "next-intl"
 
 import { PopoverContent } from "@workspace/ui/components"
@@ -11,12 +11,15 @@ export function ViewerCreateMenu({ onSelect }: { onSelect: () => void }) {
   const t = useTranslations("viewer.create")
   const items = [
     { key: "upload", icon: Upload },
-    { key: "live", icon: Radio },
     { key: "post", icon: FilePenLine },
   ] as const
 
   return (
-    <PopoverContent align="end" sideOffset={10} className="w-52 gap-0 overflow-hidden rounded-xl p-2">
+    <PopoverContent
+      align="end"
+      sideOffset={10}
+      className="w-52 gap-0 overflow-hidden rounded-xl p-2"
+    >
       {items.map(({ key, icon: Icon }) => (
         <a
           key={key}

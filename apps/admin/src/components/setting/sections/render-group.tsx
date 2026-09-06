@@ -11,6 +11,8 @@ import { WorkerScraperSection } from "./worker-scraper-section"
 export const SETTING_GROUPS = [
   { id: "domain", href: "/setting/domain" },
   { id: "adverts", href: "/setting/adverts" },
+  { id: "seo", href: "/setting/seo" },
+  { id: "homeFeed", href: "/setting/home-feed" },
   { id: "workerScraper", href: "/setting/worker-scraper" },
 ] as const
 

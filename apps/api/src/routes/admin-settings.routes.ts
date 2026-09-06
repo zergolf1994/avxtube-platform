@@ -2,6 +2,8 @@ import { Router } from "express"
 import {
   advertHobbyValid,
   domainSettingSchema,
+  homeFeedSettingSchema,
+  seoSettingSchema,
   workerScraperSettingSchema,
 } from "@workspace/core/validators"
 import {
@@ -20,6 +22,15 @@ import {
   getWorkerScraperSettings,
   saveWorkerScraperSettings,
 } from "../services/settings/worker-scraper-setting.service"
+import {
+  getSeoSettings,
+  saveSeoSettings,
+} from "../services/settings/seo-setting.service"
+import {
+  getHomeFeedSettings,
+  saveHomeFeedSettings,
+} from "../services/settings/home-feed-setting.service"
+import { getPublicVideoCategories } from "../services/content-video.service"
 const router: Router = Router()
 router.use(authenticateUser, requireAdmin)
 router.use((_req, res, next) => {
@@ -97,6 +108,58 @@ router.put("/worker-scraper", async (req, res, next) => {
   }
   try {
     res.json({ settings: await saveWorkerScraperSettings(parsed.data) })
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.get("/seo", async (_req, res, next) => {
+  try {
+    res.json({ settings: await getSeoSettings() })
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.put("/seo", async (req, res, next) => {
+  const parsed = seoSettingSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({
+      error: "Invalid SEO settings",
+      issues: parsed.error.issues,
+    })
+    return
+  }
+  try {
+    res.json({ settings: await saveSeoSettings(parsed.data) })
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.get("/home-feed", async (_req, res, next) => {
+  try {
+    const [settings, categories] = await Promise.all([
+      getHomeFeedSettings(),
+      getPublicVideoCategories(),
+    ])
+    res.json({ settings, categories })
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.put("/home-feed", async (req, res, next) => {
+  const parsed = homeFeedSettingSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({
+      error: "Invalid home feed settings",
+      issues: parsed.error.issues,
+    })
+    return
+  }
+  try {
+    res.json({ settings: await saveHomeFeedSettings(parsed.data) })
   } catch (error) {
     next(error)
   }
