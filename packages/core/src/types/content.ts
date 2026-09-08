@@ -204,6 +204,29 @@ export type CursorPage<Item> = {
   total: number
 }
 
+export type PublicTermTaxonomy = "category" | "tag"
+
+export type PublicTerm = {
+  id: string
+  name: string
+  slug: string
+  taxonomy: PublicTermTaxonomy
+  description: string
+}
+
+export type TermsResponse = {
+  terms: PublicTerm[]
+  total: number
+  nextCursor: string | null
+}
+
+export type TermDetailResponse = {
+  term: PublicTerm
+  videos: Video[]
+  total: number
+  nextCursor: string | null
+}
+
 export type CollectionKind = "library" | "history" | "watch-later" | "liked"
 
 export type CollectionResponse = {

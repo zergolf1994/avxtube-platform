@@ -9,6 +9,7 @@ import { registerApiAuthEvents } from "./auth/register-auth-events"
 import { requestLogger } from "./middlewares/request-logger.middleware"
 import ApiRoutes from "./routes/index"
 import { backfillUsernames } from "./services/auth/backfill-usernames.service"
+import { startViewerSearchSync } from "./services/viewer-search-sync"
 const app = express()
 // global.dirCached = path.resolve(".cached");
 
@@ -34,6 +35,7 @@ async function initializeDatabase() {
     }
 
     console.log("✅ Database connection and indexes established")
+    startViewerSearchSync()
   } catch (error) {
     console.error("❌ Database connection failed:", error)
     process.exit(1)

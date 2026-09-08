@@ -18,6 +18,7 @@
   "videoCount": "วิดีโอ {count} รายการ",
   "actorsTitle": "นักแสดง",
   "actorsDescription": "ค้นหาและติดตามนักแสดงที่คุณชื่นชอบ",
+  "actorCount": "นักแสดง {count} คน",
   "latestVideos": "วิดีโอล่าสุด",
   "like": "ชอบ",
   "dislike": "ไม่ชอบ",
@@ -403,5 +404,22 @@
       },
       "watched": { "watched": "ดูแล้ว", "unwatched": "ยังไม่ได้ดู" }
     }
+  },
+  "taxonomy": {
+    "category": {
+      "title": "หมวดหมู่",
+      "single": "หมวดหมู่",
+      "description": "เลือกดูวิดีโอตามหมวดหมู่ที่สนใจ"
+    },
+    "tag": {
+      "title": "แท็ก",
+      "single": "แท็ก",
+      "description": "ค้นพบวิดีโอจากแท็กทั้งหมด"
+    },
+    "termCount": "ทั้งหมด {count} รายการ",
+    "videoCount": "วิดีโอ {count} รายการ",
+    "videos": "วิดีโอ",
+    "emptyTerms": "ยังไม่มีรายการในขณะนี้",
+    "emptyVideos": "ยังไม่มีวิดีโอที่เผยแพร่ในรายการนี้"
   }
 }

@@ -7,7 +7,7 @@ export class SearchCountCache {
   >()
 
   constructor(
-    private readonly ttlMs = 30_000,
+    private readonly ttlMs = 5 * 60_000,
     private readonly maxEntries = 128,
     private readonly now = Date.now
   ) {}

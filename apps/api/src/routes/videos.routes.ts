@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto"
+import { getRelatedVideos } from "../services/related-videos.service"
 import type { Video } from "@workspace/core/types"
 import { ContentModel } from "@workspace/db/models"
 import { Router, type NextFunction, type Request, type Response } from "express"
@@ -20,7 +20,6 @@ import {
   stringValue,
   numberValue,
   toRecord,
-  contentSummaryPagePipeline,
 } from "../services/content-video.service"
 import {
   createVideoComment,
@@ -35,7 +34,6 @@ import {
 
 const router: Router = Router()
 const WATCH_CORE_CACHE_MS = 30_000
-const RELATED_POOL_CACHE_MS = 5 * 60_000
 const VIDEO_PAGE_CACHE_MS = 30_000
 const videoPageCache = new Map<
   string,
@@ -52,12 +50,6 @@ const watchCoreCache = new Map<
   string,
   { expiresAt: number; pending: Promise<WatchCore | null> }
 >()
-let relatedPoolCache:
-  | {
-      expiresAt: number
-      pending: Promise<Record<string, unknown>[]>
-    }
-  | undefined
 
 router.get("/", async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -248,15 +240,12 @@ router.get(
       }
       const cursor = nonNegativeInteger(req.query.cursor, 0)
       const limit = boundedLimit(req.query.limit, 4)
-      const filter = {
-        ...publicVideoFilter(),
-        _id: { $ne: stringValue(video._id) },
-      }
-      const [contents, total, { mapVideoSummary }] = await Promise.all([
-        getPublicContentSummaries(filter, limit, cursor),
-        countPublicContents(filter),
-        getContentMappers(),
+      const [recommendations, { mapVideoSummary }] = await Promise.all([
+        getRelatedVideos(video),
+        getContentMappers(normalizeContentLocale(req.query.locale)),
       ])
+      const total = recommendations.length
+      const contents = recommendations.slice(cursor, cursor + limit)
       const items = contents.map(mapVideoSummary)
       const nextOffset = cursor + items.length
       res.status(200).json({
@@ -371,20 +360,12 @@ function getWatchCore(idOrSlug: string): Promise<WatchCore | null> {
   const cached = watchCoreCache.get(key)
   if (cached && cached.expiresAt > Date.now()) return cached.pending
 
-  const pending = Promise.all([
-    findPublicVideo(idOrSlug),
-    // Fetch one extra candidate because the requested video may be inside the
-    // shared random UUID slice. Both indexed queries can run in parallel.
-    getRelatedPool(),
-  ])
-    .then(([content, candidates]) => {
+  const pending = findPublicVideo(idOrSlug)
+    .then(async (content) => {
       if (!content) return null
-      const contentId = stringValue(content._id)
       return {
         content,
-        relatedContents: candidates
-          .filter((candidate) => stringValue(candidate._id) !== contentId)
-          .slice(0, 20),
+        relatedContents: await getRelatedVideos(content),
       }
     })
     .catch((error) => {
@@ -409,21 +390,6 @@ function getWatchCore(idOrSlug: string): Promise<WatchCore | null> {
   return pending
 }
 
-function getRelatedPool() {
-  if (relatedPoolCache && relatedPoolCache.expiresAt > Date.now())
-    return relatedPoolCache.pending
-
-  const pending = getRandomRelatedContents("", 21).catch((error) => {
-    relatedPoolCache = undefined
-    throw error
-  })
-  relatedPoolCache = {
-    expiresAt: Date.now() + RELATED_POOL_CACHE_MS,
-    pending,
-  }
-  return pending
-}
-
 function toRelatedSummary(video: Video): Video {
   return {
     id: video.id,
@@ -437,31 +403,6 @@ function toRelatedSummary(video: Video): Video {
     ...(video.previewUrl ? { previewUrl: video.previewUrl } : {}),
     ...(video.channel ? { channel: video.channel } : {}),
   }
-}
-
-async function getRandomRelatedContents(excludedId: string, limit: number) {
-  const seed = randomUUID()
-  const findRange = (range: Record<string, string>) =>
-    ContentModel.aggregate<Record<string, unknown>>(
-      contentSummaryPagePipeline(
-        {
-          ...publicVideoFilter(),
-          _id: { ...range, ...(excludedId ? { $ne: excludedId } : {}) },
-        },
-        limit,
-        0,
-        { _id: 1 }
-      )
-    )
-      .hint({ _id: 1 })
-      .exec()
-
-  // Content IDs are UUIDv4, so an indexed seek from a random UUID produces a
-  // random slice without MongoDB's $sample scanning the whole public catalog.
-  const after = await findRange({ $gte: seed })
-  if (after.length >= limit) return after
-  const before = await findRange({ $lt: seed })
-  return [...after, ...before.slice(0, limit - after.length)]
 }
 
 function boundedLimit(value: unknown, fallback: number) {

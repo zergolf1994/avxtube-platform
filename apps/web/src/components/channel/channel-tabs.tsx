@@ -8,10 +8,12 @@ export async function ChannelTabs({
   channel,
   activeTab,
   locale,
+  basePath = `/channel/${channel.handle}`,
 }: {
   channel: Channel
   activeTab: ChannelTabId
   locale: string
+  basePath?: string
 }) {
   const t = await getTranslations({ locale, namespace: "video.channel.tabs" })
 
@@ -26,9 +28,7 @@ export async function ChannelTabs({
           <Link
             key={tab}
             href={
-              tab === channel.defaultTab
-                ? `/channel/${channel.handle}`
-                : `/channel/${channel.handle}?tab=${tab}`
+              tab === channel.defaultTab ? basePath : `${basePath}?tab=${tab}`
             }
             scroll={false}
             aria-current={activeTab === tab ? "page" : undefined}

@@ -6,11 +6,13 @@ import { useSearchParams } from "next/navigation"
 
 import { useRouter } from "@/i18n/navigation"
 
-export function SearchPager({
+export function PathPager({
+  path,
   page,
   pageCount,
   pageSize,
 }: {
+  path: string
   page: number
   pageCount: number
   pageSize: number
@@ -22,21 +24,19 @@ export function SearchPager({
   const changePage = React.useCallback(
     (nextPage: number) => {
       const params = new URLSearchParams(searchParams.toString())
-      // `_rsc` is an internal Next.js transport key, not persistent search
-      // state. Keeping a copied value produces stale RSC URLs on page jumps.
       params.delete("_rsc")
       if (nextPage <= 1) params.delete("page")
       else params.set("page", String(nextPage))
       const query = params.toString()
       startTransition(() => {
-        router.push(`/search${query ? `?${query}` : ""}`)
+        router.push(`${path}${query ? `?${query}` : ""}`)
       })
     },
-    [router, searchParams, startTransition]
+    [path, router, searchParams]
   )
 
   return (
-    <div aria-busy={pending} aria-live="polite">
+    <div aria-busy={pending}>
       <DataTablePager
         page={page}
         pageCount={pageCount}

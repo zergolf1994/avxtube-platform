@@ -6,7 +6,6 @@ import {
   ContentModel,
   MediaModel,
   SettingModel,
-  TermModel,
 } from "@workspace/db/models"
 import searchRouter from "../src/routes/search.routes"
 import { SearchCountCache } from "../src/services/search-count-cache"
@@ -21,6 +20,10 @@ afterEach(() => {
 test("sorts use real fields and deterministic ties, including reverse index scans", () => {
   assert.deepEqual(searchSort("relevance"), searchSort("latest"))
   assert.deepEqual(searchSort("unknown"), searchSort("latest"))
+  assert.deepEqual(searchSort("relevance", true), {
+    __searchScore: { $meta: "textScore" },
+    _id: -1,
+  })
   assert.deepEqual(searchSort("oldest"), { createdAt: 1, _id: 1 })
   assert.deepEqual(searchSort("release"), {
     "metadata.releaseDate": -1,
@@ -84,8 +87,6 @@ function mockDatabase(initialRows: Record<string, unknown>[]) {
   const count = mock.method(ContentModel, "countDocuments", () => ({
     exec: async () => 75,
   }))
-  mock.method(ChannelModel, "distinct", async () => ["actor-id"])
-  mock.method(TermModel, "distinct", async () => ["term-id"])
   mock.method(ChannelModel, "aggregate", () => ({ exec: async () => [] }))
   mock.method(SettingModel, "findOne", () => ({ lean: async () => null }))
   return {
@@ -157,22 +158,38 @@ test("full pages reuse counts across locale/sort but read fresh rows and keep fi
   assert.equal(filter.visibility, "public")
   assert.equal(filter.status, "published")
   assert.equal(filter.deletedAt, null)
-  assert.equal(filter.$or[0].title.source, "full-page")
-  assert.ok(
-    filter.$or.some((part: any) => part.$expr),
-    "search every stored translation"
-  )
-  assert.ok(
-    filter.$or.some((part: any) => part.actorIds?.$in.includes("actor-id"))
-  )
-  assert.ok(
-    filter.$or.some((part: any) => part.termIds?.$in.includes("term-id"))
-  )
+  assert.deepEqual(filter.$text, { $search: "full-page" })
+  assert.equal(filter.$or, undefined)
+  assert.equal(filter.$expr, undefined)
   assert.deepEqual(db.pipelines[1]![1]!.$sort, {
     "stats.viewCount": -1,
     createdAt: -1,
     _id: -1,
   })
+})
+
+test("hyphenated DVD IDs use an indexed slug prefix", async () => {
+  const db = mockDatabase([])
+  await withServer(async (url) => {
+    await fetch(`${url}?q=fct-206&type=video&part=results`)
+  })
+  const filter = db.pipelines[0]![0]!.$match
+  assert.equal(filter.$text, undefined)
+  assert.equal(filter.slug.$regex.source, "^fct-206")
+  assert.equal(filter.slug.$type, "string")
+  assert.deepEqual(db.pipelines[0]![1]!.$sort, { slug: 1, _id: 1 })
+})
+
+test("bare FC2 numbers use an indexed slug prefix", async () => {
+  const db = mockDatabase([])
+  await withServer(async (url) => {
+    await fetch(`${url}?q=497240&type=video&part=results`)
+  })
+  const filter = db.pipelines[0]![0]!.$match
+  assert.equal(filter.$text, undefined)
+  assert.equal(filter.slug.$regex.source, "^fc2-ppv-497240")
+  assert.equal(filter.slug.$type, "string")
+  assert.deepEqual(db.pipelines[0]![1]!.$sort, { slug: 1, _id: 1 })
 })
 
 test("duration and feature can match different media; empty required media short-circuits", async () => {

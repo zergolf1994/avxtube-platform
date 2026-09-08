@@ -19,6 +19,9 @@ import type {
   SearchResponse,
   ChannelDetailResponse,
   HistoryResponse,
+  PublicTermTaxonomy,
+  TermDetailResponse,
+  TermsResponse,
 } from "@workspace/core/types"
 
 const apiOrigin = process.env.API_INTERNAL_URL ?? "http://localhost:4000"
@@ -112,12 +115,14 @@ export async function getWatchData(
   return response.json() as Promise<WatchData>
 }
 
-export async function getActors(): Promise<ActorsResponse> {
-  return fetchJson<ActorsResponse>(
-    new URL(`/${apiVersion}/actors`, apiOrigin),
-    undefined,
-    120
-  )
+export async function getActors(
+  cursor = 0,
+  limit = 100
+): Promise<ActorsResponse> {
+  const url = new URL(`/${apiVersion}/actors`, apiOrigin)
+  url.searchParams.set("cursor", String(cursor))
+  url.searchParams.set("limit", String(limit))
+  return fetchJson<ActorsResponse>(url, undefined, 120)
 }
 
 export async function getActor(
@@ -133,6 +138,41 @@ export async function getActor(
       `Actors API returned ${response.status} ${response.statusText}`
     )
   return response.json() as Promise<{ actor: Actor; videos: Video[] }>
+}
+
+export async function getTerms(
+  taxonomy: PublicTermTaxonomy,
+  cursor = 0,
+  limit = 48
+): Promise<TermsResponse> {
+  const url = new URL(`/${apiVersion}/terms`, apiOrigin)
+  url.searchParams.set("taxonomy", taxonomy)
+  url.searchParams.set("cursor", String(cursor))
+  url.searchParams.set("limit", String(limit))
+  return fetchJson<TermsResponse>(url, undefined, 120)
+}
+
+export async function getTerm(
+  taxonomy: PublicTermTaxonomy,
+  slug: string,
+  cursor = 0,
+  limit = 24,
+  locale = "en"
+): Promise<TermDetailResponse | null> {
+  const url = new URL(
+    `/${apiVersion}/terms/${taxonomy}/${encodeURIComponent(slug)}`,
+    apiOrigin
+  )
+  url.searchParams.set("cursor", String(cursor))
+  url.searchParams.set("limit", String(limit))
+  url.searchParams.set("locale", locale)
+  const response = await fetch(url, revalidatedJsonRequest(30))
+  if (response.status === 404) return null
+  if (!response.ok)
+    throw new Error(
+      `Terms API returned ${response.status} ${response.statusText}`
+    )
+  return response.json() as Promise<TermDetailResponse>
 }
 
 export async function getChannel(

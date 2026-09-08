@@ -266,7 +266,7 @@ function VideoDetails({ video }: { video: Video }) {
       items: (video.actors ?? []).map((item) => ({
         id: item.id,
         label: item.name,
-        href: `/channel/${item.handle.replace(/^@/, "")}`,
+        href: `/actor/${item.handle.replace(/^@/, "")}`,
       })),
     },
     {
@@ -293,7 +293,7 @@ function VideoDetails({ video }: { video: Video }) {
       items: (video.categories ?? []).map((item) => ({
         id: item.id,
         label: item.name,
-        href: `/?category=${encodeURIComponent(item.slug)}`,
+        href: `/category/${encodeURIComponent(item.slug)}`,
       })),
     },
     {
@@ -302,7 +302,7 @@ function VideoDetails({ video }: { video: Video }) {
       items: (video.tags ?? []).map((item) => ({
         id: item.id,
         label: item.name,
-        href: `/search?q=${encodeURIComponent(item.name)}`,
+        href: `/tag/${encodeURIComponent(item.slug)}`,
       })),
     },
     {

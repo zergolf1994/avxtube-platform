@@ -140,7 +140,7 @@ export function contentPagePipeline(
   filter: Record<string, unknown>,
   limit = 24,
   offset = 0,
-  sort: Record<string, 1 | -1> | null = { createdAt: -1, _id: -1 }
+  sort: PipelineStage.Sort["$sort"] | null = { createdAt: -1, _id: -1 }
 ): PipelineStage[] {
   return [
     { $match: filter },
@@ -181,7 +181,7 @@ export function contentSummaryPagePipeline(
   filter: Record<string, unknown>,
   limit = 24,
   offset = 0,
-  sort: Record<string, 1 | -1> | null = { createdAt: -1, _id: -1 }
+  sort: PipelineStage.Sort["$sort"] | null = { createdAt: -1, _id: -1 }
 ): PipelineStage[] {
   return [
     { $match: filter },
@@ -189,51 +189,116 @@ export function contentSummaryPagePipeline(
     { $skip: offset },
     { $limit: limit },
     ...contentLookups(true),
-    {
-      $project: {
-        _id: 1,
-        kind: 1,
-        title: 1,
-        translated: 1,
-        slug: 1,
-        createdAt: 1,
-        stats: 1,
-        studioIds: 1,
-        actressIds: 1,
-        actorIds: 1,
-        channelIds: 1,
-        mediaIds: 1,
-        termIds: 1,
-        "metadata.dvdId": 1,
-        "metadata.commentPolicy": 1,
-        "metadata.releaseDate": 1,
-        channels: 1,
-        media: 1,
-        terms: 1,
-      },
-    },
+    contentSummaryProjection(),
   ]
+}
+
+function contentSummaryProjection(): PipelineStage.Project {
+  return {
+    $project: {
+      _id: 1,
+      kind: 1,
+      title: 1,
+      translated: 1,
+      slug: 1,
+      createdAt: 1,
+      stats: 1,
+      studioIds: 1,
+      actressIds: 1,
+      actorIds: 1,
+      channelIds: 1,
+      mediaIds: 1,
+      termIds: 1,
+      "metadata.dvdId": 1,
+      "metadata.commentPolicy": 1,
+      "metadata.releaseDate": 1,
+      channels: 1,
+      media: 1,
+      terms: 1,
+    },
+  }
 }
 
 export function getPublicContents(
   filter: Record<string, unknown> = publicVideoFilter(),
   limit = 24,
   offset = 0,
-  sort?: Record<string, 1 | -1> | null
+  sort?: PipelineStage.Sort["$sort"] | null
 ) {
   return ContentModel.aggregate<Record<string, unknown>>(
     contentPagePipeline(filter, limit, offset, sort)
   ).exec()
 }
 
-export function getPublicContentSummaries(
+const PUBLIC_LATEST_INDEX = {
+  kind: 1,
+  status: 1,
+  visibility: 1,
+  deletedAt: 1,
+  createdAt: -1,
+  _id: -1,
+} as const
+const COVERED_OFFSET_THRESHOLD = 1_000
+
+function canUseCoveredLatestOffset(
+  filter: Record<string, unknown>,
+  sort: PipelineStage.Sort["$sort"] | null
+) {
+  return (
+    Object.keys(filter).length === 4 &&
+    filter.kind === "video" &&
+    filter.status === "published" &&
+    filter.visibility === "public" &&
+    filter.deletedAt === null &&
+    sort?.createdAt === -1 &&
+    sort._id === -1 &&
+    Object.keys(sort).length === 2
+  )
+}
+
+export async function getPublicContentSummaries(
   filter: Record<string, unknown> = publicVideoFilter(),
   limit = 24,
   offset = 0,
-  sort?: Record<string, 1 | -1> | null
+  sort?: PipelineStage.Sort["$sort"] | null
 ) {
+  const resolvedSort =
+    sort === undefined ? { createdAt: -1 as const, _id: -1 as const } : sort
+
+  if (
+    offset >= COVERED_OFFSET_THRESHOLD &&
+    canUseCoveredLatestOffset(filter, resolvedSort)
+  ) {
+    // Fetching joined summary fields forces MongoDB to FETCH every document
+    // before a deep $skip. Project IDs while the scan is still covered, then
+    // hydrate only the requested page through the collection's _id index. The
+    // self-lookup keeps this to one database round trip.
+    return ContentModel.aggregate<Record<string, unknown>>([
+      { $match: filter },
+      { $sort: { createdAt: -1, _id: -1 } },
+      { $project: { _id: 1 } },
+      { $skip: offset },
+      { $limit: limit },
+      {
+        $lookup: {
+          from: ContentModel.collection.name,
+          localField: "_id",
+          foreignField: "_id",
+          pipeline: [{ $match: filter }],
+          as: "__pageContent",
+        },
+      },
+      { $unwind: "$__pageContent" },
+      { $replaceWith: "$__pageContent" },
+      ...contentLookups(true),
+      contentSummaryProjection(),
+    ])
+      .hint(PUBLIC_LATEST_INDEX)
+      .exec()
+  }
+
   return ContentModel.aggregate<Record<string, unknown>>(
-    contentSummaryPagePipeline(filter, limit, offset, sort)
+    contentSummaryPagePipeline(filter, limit, offset, resolvedSort)
   ).exec()
 }
 

@@ -12,6 +12,7 @@ import {
   mapContentToShort,
   mapContentToVideo,
   getContentMappers,
+  getPublicContentSummaries,
   mediaUrl,
   publicVideoFilter,
   publicVideoListFilter,
@@ -156,6 +157,57 @@ test("pagination happens before indexed reference lookups, and sorting has an ID
   for (const join of joins)
     assert.ok(JSON.stringify(join.pipeline).includes('"deletedAt":null'))
   assert.ok(JSON.stringify(joins[1]?.pipeline).includes('"error"'))
+})
+test("deep latest pages seek covered IDs before hydrating page relations", async () => {
+  let pipeline: any[] = []
+  let hint: unknown
+  const aggregate = mock.method(ContentModel, "aggregate", (value: any[]) => {
+    pipeline = value
+    const query = {
+      hint(value: unknown) {
+        hint = value
+        return query
+      },
+      exec: async () => [
+        { _id: "first", title: "First" },
+        { _id: "second", title: "Second" },
+      ],
+    }
+    return query
+  })
+
+  const rows = await getPublicContentSummaries(publicVideoFilter(), 2, 24_000, {
+    createdAt: -1,
+    _id: -1,
+  })
+
+  assert.deepEqual(
+    rows.map((row) => row._id),
+    ["first", "second"],
+    "the hydrated aggregation must preserve the covering-index page order"
+  )
+  assert.deepEqual(hint, {
+    kind: 1,
+    status: 1,
+    visibility: 1,
+    deletedAt: 1,
+    createdAt: -1,
+    _id: -1,
+  })
+  assert.equal(aggregate.mock.callCount(), 1)
+  assert.deepEqual(pipeline.slice(0, 5), [
+    { $match: publicVideoFilter() },
+    { $sort: { createdAt: -1, _id: -1 } },
+    { $project: { _id: 1 } },
+    { $skip: 24_000 },
+    { $limit: 2 },
+  ])
+  assert.equal(pipeline[5].$lookup.from, ContentModel.collection.name)
+  assert.deepEqual(pipeline[5].$lookup.pipeline, [
+    { $match: publicVideoFilter() },
+  ])
+  assert.deepEqual(pipeline[6], { $unwind: "$__pageContent" })
+  assert.deepEqual(pipeline[7], { $replaceWith: "$__pageContent" })
 })
 test("maps poster, trailer and highest video rendition from media only", () => {
   const video = mapContentToVideo(

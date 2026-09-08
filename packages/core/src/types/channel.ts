@@ -85,6 +85,7 @@ export type Actor = VideoChannel & {
 export type ActorsResponse = {
   actors: Actor[]
   total: number
+  nextCursor?: string | null
 }
 
 export type ChannelDetailResponse = {

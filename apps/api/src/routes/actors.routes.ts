@@ -18,12 +18,31 @@ const actorFilter = (): Record<string, unknown> => ({
   kind: "person",
   "metadata.roles": "actor",
 })
-router.get("/", async (_req, res) => {
+router.get("/", async (req, res) => {
+  const limit = Math.min(
+    100,
+    Math.max(1, Number.parseInt(String(req.query.limit ?? "100"), 10) || 100)
+  )
+  const offset = Math.max(
+    0,
+    Number.parseInt(String(req.query.cursor ?? "0"), 10) || 0
+  )
   const [rows, total] = await Promise.all([
-    getPublicChannels(actorFilter(), 100, 0, { includeContentStats: true }),
+    getPublicChannels(actorFilter(), limit, offset, {
+      includeContentStats: true,
+    }),
     countPublicChannels(actorFilter()),
   ])
-  res.json({ actors: rows.map(mapActor), total })
+  res.setHeader(
+    "Cache-Control",
+    "public, max-age=60, stale-while-revalidate=300"
+  )
+  res.json({
+    actors: rows.map(mapActor),
+    total,
+    nextCursor:
+      offset + rows.length < total ? String(offset + rows.length) : null,
+  })
 })
 router.get("/:handle", async (req, res) => {
   const [row] = await getPublicChannels(

@@ -18,6 +18,7 @@
   "videoCount": "{count} videos",
   "actorsTitle": "Actors",
   "actorsDescription": "Discover and follow your favorite performers.",
+  "actorCount": "{count} actors",
   "latestVideos": "Latest videos",
   "like": "Like",
   "dislike": "Dislike",
@@ -403,5 +404,22 @@
       },
       "watched": { "watched": "Watched", "unwatched": "Unwatched" }
     }
+  },
+  "taxonomy": {
+    "category": {
+      "title": "Categories",
+      "single": "Category",
+      "description": "Browse videos by category."
+    },
+    "tag": {
+      "title": "Tags",
+      "single": "Tag",
+      "description": "Explore videos by tag."
+    },
+    "termCount": "{count} items",
+    "videoCount": "{count} videos",
+    "videos": "Videos",
+    "emptyTerms": "No items are available yet.",
+    "emptyVideos": "No published videos are available here yet."
   }
 }

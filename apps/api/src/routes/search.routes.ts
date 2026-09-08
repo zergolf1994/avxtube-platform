@@ -1,18 +1,12 @@
 import { Router } from "express"
 import { performance } from "node:perf_hooks"
-import {
-  ChannelModel,
-  ContentModel,
-  MediaModel,
-  TermModel,
-} from "@workspace/db/models"
+import { ContentModel, MediaModel } from "@workspace/db/models"
 import {
   getPublicChannels,
   mapActor,
   publicChannelFilter,
 } from "../services/channel-viewer.service"
 import {
-  escapeRegExp,
   getPublicContentSummaries,
   getContentMappers,
   normalizeContentLocale,
@@ -21,12 +15,40 @@ import {
 } from "../services/content-video.service"
 import { SearchCountCache } from "../services/search-count-cache"
 import { searchSort } from "../services/search-sort"
+import {
+  ViewerSearch, viewerSearchReady, indexedSearchFilter,
+  indexedSearchPage, indexedProfileIds,
+} from "../services/viewer-search-index"
 
 const router: Router = Router()
 const searchCounts = new SearchCountCache()
+
+function contentTextSearch(q: string) {
+  const normalizedCode = q
+    .toLocaleLowerCase("en")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+  return /^[a-z0-9]+(?:-[a-z0-9]+)*-\d+[a-z0-9-]*$/.test(normalizedCode)
+    ? `"${normalizedCode}"`
+    : q
+}
+
+function contentSlugPrefix(q: string) {
+  if (/^\d{5,}$/.test(q)) return `fc2-ppv-${q}`
+  const normalized = q
+    .toLocaleLowerCase("en")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+  return /^[a-z][a-z0-9]{1,11}(?:-[a-z0-9]+)*-\d{2,}$/.test(normalized)
+    ? normalized
+    : ""
+}
+
 router.get("/", async (req, res) => {
   const startedAt = performance.now()
-  const q = stringValue(req.query.q).slice(0, 200)
+  const q = stringValue(req.query.q).trim().slice(0, 200)
+  const slugPrefix = contentSlugPrefix(q)
+  const useIndex = Boolean(q) && await viewerSearchReady()
   const locale = normalizeContentLocale(req.query.locale)
   const type = stringValue(req.query.type) || "all"
   const page = Math.max(
@@ -52,34 +74,14 @@ router.get("/", async (req, res) => {
             ? "short"
             : { $in: ["video", "short"] },
   }
-  const pattern = new RegExp(escapeRegExp(q), "i")
-  const channelSearch = {
+  const profileSearch: Record<string, unknown> = {
     ...publicChannelFilter(),
-    $or: [{ name: pattern }, { handle: pattern }],
-  }
-  const profileSearch = {
-    ...publicChannelFilter(),
-    $and: [
-      { $or: [{ name: pattern }, { handle: pattern }] },
-      {
-        $or: [
-          { kind: "person", "metadata.roles": "actor" },
-          { kind: "organization", "metadata.roles": "studio" },
-        ],
-      },
+    ...(q && !slugPrefix ? { $text: { $search: q } } : {}),
+    $or: [
+      { kind: "person", "metadata.roles": "actor" },
+      { kind: "organization", "metadata.roles": "studio" },
     ],
   }
-  // Resolve independent filters together instead of serial media/term scans.
-  const relatedIds = q
-    ? Promise.all([
-        ChannelModel.distinct("_id", channelSearch),
-        TermModel.distinct("_id", {
-          status: "active",
-          deletedAt: null,
-          name: pattern,
-        }),
-      ])
-    : Promise.resolve([[], []])
   const days: Record<string, number> = {
     today: 1,
     week: 7,
@@ -127,35 +129,38 @@ router.get("/", async (req, res) => {
       }).exec()
     )
   }
-  const [[channelIds, termIds], ...mediaIds] = await Promise.all([
-    relatedIds,
-    ...mediaFilters,
-  ])
-  if (q) {
-    filter.$or = [
-      { title: pattern },
-      { description: pattern },
-      translatedTextCondition(pattern),
-      ...(channelIds.length
-        ? [
-            "studioIds",
-            "actressIds",
-            "actorIds",
-            "directorIds",
-            "channelIds",
-          ].map((field) => ({ [field]: { $in: channelIds } }))
-        : []),
-      ...(termIds.length ? [{ termIds: { $in: termIds } }] : []),
-    ]
+  const mediaIds = await Promise.all(mediaFilters)
+  // Product codes are often pasted incompletely, and bare FC2 numbers commonly
+  // omit `fc2-ppv-`. Text search only matches complete tokens, so use the
+  // indexed slug prefix for these forms instead of a catalogue-wide regex.
+  if (slugPrefix) {
+    filter.slug = {
+      $regex: new RegExp(`^${slugPrefix}`),
+      $type: "string",
+    }
   }
+  // Keep the catalogue query on the compound text index. Combining text,
+  // channel and term branches in one $or made MongoDB scan and score several
+  // large candidate sets before it could paginate. Actor/studio matches are
+  // still returned by the separate indexed profile search below.
+  else if (q) filter.$text = { $search: contentTextSearch(q) }
   if (mediaIds.length) {
     // An empty required media set makes the content intersection empty. Avoid
     // sending other, potentially huge $in arrays to MongoDB in that case.
     if (mediaIds.some((ids) => !ids.length)) filter._id = { $in: [] }
     else filter.$and = mediaIds.map((ids) => ({ mediaIds: { $in: ids } }))
   }
+  const queryFilter = useIndex ? indexedSearchFilter(q, filter) : filter
+  if (useIndex && type === "all" && (page === 1 || part === "count")) {
+    delete profileSearch.$text
+    profileSearch._id = { $in: await indexedProfileIds(q) }
+  }
+  const loadCount = () => useIndex
+    ? ViewerSearch.countDocuments(queryFilter).exec()
+    : ContentModel.countDocuments(filter).exec()
   const filtersReadyAt = performance.now()
   const countKey = JSON.stringify([
+    useIndex ? "multilingual-v1" : "legacy",
     q,
     filter.kind,
     age ?? null,
@@ -164,10 +169,10 @@ router.get("/", async (req, res) => {
   ])
   if (part === "count") {
     const [count, actors] = await Promise.all([
-      searchCounts.getOrLoad(countKey, () =>
-        ContentModel.countDocuments(filter).exec()
-      ),
-      type === "all" && q ? getPublicChannels(profileSearch, 8) : [],
+      searchCounts.getOrLoad(countKey, loadCount),
+      type === "all" && q && (!slugPrefix || useIndex)
+        ? getPublicChannels(profileSearch, 8)
+        : [],
     ])
     res.setHeader(
       "Server-Timing",
@@ -176,14 +181,22 @@ router.get("/", async (req, res) => {
         `search_count;dur=${(performance.now() - filtersReadyAt).toFixed(1)}`,
       ].join(", ")
     )
+    res.setHeader(
+      "Cache-Control",
+      "public, max-age=30, stale-while-revalidate=300"
+    )
     res.json({ total: count + actors.length, contentTotal: count })
     return
   }
-  const sort = searchSort(req.query.sort)
+  const requestedSort = stringValue(req.query.sort)
+  const sort =
+    !useIndex && slugPrefix && (!requestedSort || requestedSort === "relevance")
+      ? { slug: 1 as const, _id: 1 as const }
+      : searchSort(requestedSort, Boolean(q) && (useIndex || !slugPrefix))
   const [contents, actors, { mapVideoSummary, mapShortSummary }] =
     await Promise.all([
-      getPublicContentSummaries(filter, limit, offset, sort),
-      page === 1 && type === "all" && q
+      useIndex ? indexedSearchPage(queryFilter, limit, offset, sort) : getPublicContentSummaries(filter, limit, offset, sort),
+      page === 1 && type === "all" && q && (!slugPrefix || useIndex)
         ? getPublicChannels(profileSearch, 8)
         : [],
       getContentMappers(locale),
@@ -194,15 +207,13 @@ router.get("/", async (req, res) => {
   // particular, an empty search must not scan the entire catalogue twice.
   // Locale and sort do not change membership, so they share the same count.
   const totalContents =
-    page === 1 && contents.length < limit
+    !useIndex && page === 1 && contents.length < limit
       ? contents.length
       : part === "results"
         ? undefined
         : Math.max(
             contents.length,
-            await searchCounts.getOrLoad(countKey, () =>
-              ContentModel.countDocuments(filter).exec()
-            )
+            await searchCounts.getOrLoad(countKey, loadCount)
           )
   const countedAt = performance.now()
   res.setHeader(
@@ -212,6 +223,10 @@ router.get("/", async (req, res) => {
       `search_page;dur=${(pageReadyAt - filtersReadyAt).toFixed(1)}`,
       `search_count;dur=${(countedAt - pageReadyAt).toFixed(1)}`,
     ].join(", ")
+  )
+  res.setHeader(
+    "Cache-Control",
+    "public, max-age=30, stale-while-revalidate=300"
   )
   res.json({
     videos: contents
@@ -230,33 +245,4 @@ router.get("/", async (req, res) => {
         }),
   })
 })
-
-function translatedTextCondition(pattern: RegExp) {
-  return {
-    $expr: {
-      $anyElementTrue: {
-        $map: {
-          input: { $objectToArray: { $ifNull: ["$translated", {}] } },
-          as: "translation",
-          in: {
-            $or: [
-              {
-                $regexMatch: {
-                  input: { $ifNull: ["$$translation.v.title", ""] },
-                  regex: pattern,
-                },
-              },
-              {
-                $regexMatch: {
-                  input: { $ifNull: ["$$translation.v.description", ""] },
-                  regex: pattern,
-                },
-              },
-            ],
-          },
-        },
-      },
-    },
-  }
-}
 export default router

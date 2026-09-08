@@ -13,7 +13,13 @@ export const viewerRoutes = {
   short: (videoId: string) => `/shorts/${videoId}`,
   playlist: (playlistId: string) => `/playlist/${playlistId}`,
   channel: (handle: string) => `/channel/${handle.replace(/^@/, "")}`,
-  actor: (handle: string) => `/channel/${handle.replace(/^@/, "")}`,
-  followedProfile: (_type: "actor" | "studio", handle: string) => `/channel/${handle.replace(/^@/, "")}`,
+  actors: "/actor",
+  actor: (handle: string) => `/actor/${handle.replace(/^@/, "")}`,
+  categories: "/category",
+  category: (slug: string) => `/category/${slug}`,
+  tags: "/tag",
+  tag: (slug: string) => `/tag/${slug}`,
+  followedProfile: (_type: "actor" | "studio", handle: string) =>
+    `/channel/${handle.replace(/^@/, "")}`,
   studio: "/studio",
 } as const

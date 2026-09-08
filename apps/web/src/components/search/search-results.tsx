@@ -37,7 +37,7 @@ export async function SearchResults({
             {result.actors.map((actor) => (
               <Link
                 key={actor.id}
-                href={`/channel/${actor.handle.replace(/^@/, "")}`}
+                href={`/actor/${actor.handle.replace(/^@/, "")}`}
                 className="w-28 shrink-0 text-center"
               >
                 <ChannelImage
