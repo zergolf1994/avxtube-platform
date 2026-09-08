@@ -234,8 +234,10 @@ export async function prepareContentReferences(
     input.studioIds = ids(
       input.studioIds ?? metadata.studioIds ?? [metadata.studioId]
     )
-  if ("actressIds" in input || "actressIds" in metadata)
+  if ("actressIds" in input || "actressIds" in metadata) {
     input.actressIds = ids(input.actressIds ?? metadata.actressIds)
+    input.actressCount = ids(input.actressIds).length
+  }
   if ("actorIds" in input || "actorIds" in metadata)
     input.actorIds = ids(input.actorIds ?? metadata.actorIds)
   if ("directorIds" in input || "directorIds" in metadata)

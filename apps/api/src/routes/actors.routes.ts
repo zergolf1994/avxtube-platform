@@ -1,12 +1,12 @@
 import { Router } from "express"
-import { ChannelModel } from "@workspace/db/models"
 import {
   getPublicChannels,
+  countPublicChannels,
   mapActor,
   publicChannelFilter,
 } from "../services/channel-viewer.service"
 import {
-  getPublicContents,
+  getPublicContentSummaries,
   getContentMappers,
   publicVideoFilter,
   contentChannelFilter,
@@ -20,8 +20,8 @@ const actorFilter = (): Record<string, unknown> => ({
 })
 router.get("/", async (_req, res) => {
   const [rows, total] = await Promise.all([
-    getPublicChannels(actorFilter(), 100),
-    ChannelModel.countDocuments(actorFilter()),
+    getPublicChannels(actorFilter(), 100, 0, { includeContentStats: true }),
+    countPublicChannels(actorFilter()),
   ])
   res.json({ actors: rows.map(mapActor), total })
 })
@@ -31,18 +31,20 @@ router.get("/:handle", async (req, res) => {
       ...actorFilter(),
       handle: req.params.handle.replace(/^@/, "").toLowerCase(),
     },
-    1
+    1,
+    0,
+    { includeContentStats: true }
   )
   if (!row) {
     res.status(404).json({ error: "Actor not found" })
     return
   }
   const actor = mapActor(row)
-  const contents = await getPublicContents(
+  const contents = await getPublicContentSummaries(
     { ...publicVideoFilter(), ...contentChannelFilter(actor.id) },
     48
   )
-  const { mapVideo } = await getContentMappers()
-  res.json({ actor, videos: contents.map(mapVideo) })
+  const { mapVideoSummary } = await getContentMappers()
+  res.json({ actor, videos: contents.map(mapVideoSummary) })
 })
 export default router

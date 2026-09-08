@@ -13,7 +13,7 @@ import {
 } from "../services/channel-viewer.service"
 import {
   escapeRegExp,
-  getPublicContents,
+  getPublicContentSummaries,
   getContentMappers,
   normalizeContentLocale,
   publicVideoFilter,
@@ -180,13 +180,14 @@ router.get("/", async (req, res) => {
     return
   }
   const sort = searchSort(req.query.sort)
-  const [contents, actors, { mapVideo, mapShort }] = await Promise.all([
-    getPublicContents(filter, limit, offset, sort),
-    page === 1 && type === "all" && q
-      ? getPublicChannels(profileSearch, 8)
-      : [],
-    getContentMappers(locale),
-  ])
+  const [contents, actors, { mapVideoSummary, mapShortSummary }] =
+    await Promise.all([
+      getPublicContentSummaries(filter, limit, offset, sort),
+      page === 1 && type === "all" && q
+        ? getPublicChannels(profileSearch, 8)
+        : [],
+      getContentMappers(locale),
+    ])
   const pageReadyAt = performance.now()
   // The first page is exhaustive when it contains fewer than the requested
   // page size. Later empty/short pages still need the catalogue count.
@@ -213,8 +214,12 @@ router.get("/", async (req, res) => {
     ].join(", ")
   )
   res.json({
-    videos: contents.filter((item) => item.kind === "video").map(mapVideo),
-    shorts: contents.filter((item) => item.kind === "short").map(mapShort),
+    videos: contents
+      .filter((item) => item.kind === "video")
+      .map(mapVideoSummary),
+    shorts: contents
+      .filter((item) => item.kind === "short")
+      .map(mapShortSummary),
     actors: actors.map(mapActor),
     playlists: [],
     ...(totalContents === undefined

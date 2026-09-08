@@ -28,15 +28,25 @@ function createVideosApiUrl(path = ""): URL {
   return new URL(`/${apiVersion}/videos${path}`, apiOrigin)
 }
 
+function revalidatedJsonRequest(revalidate: number): RequestInit {
+  return {
+    headers: { accept: "application/json" },
+    next: { revalidate },
+  } as RequestInit
+}
+
 async function fetchJson<ResponseBody>(
   url: URL,
-  requestHeaders?: HeadersInit
+  requestHeaders?: HeadersInit,
+  revalidateSeconds?: number
 ): Promise<ResponseBody> {
   const headers = new Headers(requestHeaders)
   headers.set("accept", "application/json")
   const response = await fetch(url, {
     headers,
-    cache: "no-store",
+    ...(revalidateSeconds
+      ? { next: { revalidate: revalidateSeconds } }
+      : { cache: "no-store" as const }),
   })
 
   if (!response.ok) {
@@ -49,7 +59,7 @@ async function fetchJson<ResponseBody>(
 }
 
 export async function getVideos(): Promise<VideosResponse> {
-  return fetchJson<VideosResponse>(createVideosApiUrl())
+  return fetchJson<VideosResponse>(createVideosApiUrl(), undefined, 30)
 }
 
 export async function getVideosPage(
@@ -65,7 +75,7 @@ export async function getVideosPage(
   if (sort) url.searchParams.set("sort", sort)
   if (actress !== "all") url.searchParams.set("actress", actress)
   url.searchParams.set("locale", locale)
-  return fetchJson<CursorPage<Video>>(url)
+  return fetchJson<CursorPage<Video>>(url, undefined, 30)
 }
 
 export async function getVideo(
@@ -74,10 +84,7 @@ export async function getVideo(
 ): Promise<Video | null> {
   const url = createVideosApiUrl(`/${encodeURIComponent(id)}`)
   url.searchParams.set("locale", locale)
-  const response = await fetch(url, {
-    headers: { accept: "application/json" },
-    cache: "no-store",
-  })
+  const response = await fetch(url, revalidatedJsonRequest(30))
 
   if (response.status === 404) return null
   if (!response.ok) {
@@ -96,10 +103,7 @@ export async function getWatchData(
 ): Promise<WatchData | null> {
   const url = createVideosApiUrl(`/${encodeURIComponent(id)}`)
   url.searchParams.set("locale", locale)
-  const response = await fetch(url, {
-    headers: { accept: "application/json" },
-    cache: "no-store",
-  })
+  const response = await fetch(url, revalidatedJsonRequest(30))
   if (response.status === 404) return null
   if (!response.ok)
     throw new Error(
@@ -109,7 +113,11 @@ export async function getWatchData(
 }
 
 export async function getActors(): Promise<ActorsResponse> {
-  return fetchJson<ActorsResponse>(new URL(`/${apiVersion}/actors`, apiOrigin))
+  return fetchJson<ActorsResponse>(
+    new URL(`/${apiVersion}/actors`, apiOrigin),
+    undefined,
+    120
+  )
 }
 
 export async function getActor(
@@ -117,10 +125,7 @@ export async function getActor(
 ): Promise<{ actor: Actor; videos: Video[] } | null> {
   const response = await fetch(
     new URL(`/${apiVersion}/actors/${encodeURIComponent(handle)}`, apiOrigin),
-    {
-      headers: { accept: "application/json" },
-      cache: "no-store",
-    }
+    revalidatedJsonRequest(120)
   )
   if (response.status === 404) return null
   if (!response.ok)
@@ -135,10 +140,7 @@ export async function getChannel(
 ): Promise<ChannelDetailResponse | null> {
   const response = await fetch(
     new URL(`/${apiVersion}/channels/${encodeURIComponent(handle)}`, apiOrigin),
-    {
-      headers: { accept: "application/json" },
-      cache: "no-store",
-    }
+    revalidatedJsonRequest(120)
   )
   if (response.status === 404) return null
   if (!response.ok)
@@ -160,16 +162,13 @@ export async function getShortsPage(
   const url = new URL(`/${apiVersion}/shorts`, apiOrigin)
   url.searchParams.set("page", String(page))
   url.searchParams.set("pageSize", String(pageSize))
-  return fetchJson<ShortsPageResponse>(url)
+  return fetchJson<ShortsPageResponse>(url, undefined, 30)
 }
 
 export async function getShort(id: string): Promise<Short | null> {
   const response = await fetch(
     new URL(`/${apiVersion}/shorts/${encodeURIComponent(id)}`, apiOrigin),
-    {
-      headers: { accept: "application/json" },
-      cache: "no-store",
-    }
+    revalidatedJsonRequest(30)
   )
   if (response.status === 404) return null
   if (!response.ok)
@@ -232,7 +231,11 @@ export async function searchContent(
   params: Record<string, string>,
   locale = "en"
 ): Promise<SearchResponse> {
-  return fetchJson<SearchResponse>(createSearchUrl(params, locale))
+  return fetchJson<SearchResponse>(
+    createSearchUrl(params, locale),
+    undefined,
+    30
+  )
 }
 
 function createSearchUrl(params: Record<string, string>, locale: string) {
@@ -249,7 +252,7 @@ export async function searchContentResults(
 ): Promise<Omit<SearchResponse, "total"> & { total?: number }> {
   const url = createSearchUrl(params, locale)
   url.searchParams.set("part", "results")
-  return fetchJson(url)
+  return fetchJson(url, undefined, 30)
 }
 
 export async function searchContentCount(
@@ -258,7 +261,7 @@ export async function searchContentCount(
 ): Promise<{ total: number; contentTotal?: number }> {
   const url = createSearchUrl(params, locale)
   url.searchParams.set("part", "count")
-  return fetchJson(url)
+  return fetchJson(url, undefined, 30)
 }
 
 export async function getHomeFeed(
@@ -268,7 +271,7 @@ export async function getHomeFeed(
   const url = new URL(`/${apiVersion}/home`, apiOrigin)
   url.searchParams.set("category", category)
   url.searchParams.set("locale", locale)
-  return fetchJson<HomeFeedResponse>(url)
+  return fetchJson<HomeFeedResponse>(url, undefined, 30)
 }
 
 export async function getPlaylist(id: string): Promise<Playlist | null> {

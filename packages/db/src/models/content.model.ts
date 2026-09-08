@@ -73,6 +73,9 @@ const contentSchema = new Schema(
       type: [{ type: String, ref: "Channel" }],
       default: undefined,
     },
+    // Materialized because MongoDB cannot use a multikey index to efficiently
+    // answer "exactly one" versus "two or more" array-element filters.
+    actressCount: { type: Number, default: 0, min: 0 },
     actorIds: {
       type: [{ type: String, ref: "Channel" }],
       default: undefined,
@@ -113,6 +116,50 @@ contentSchema.index({ actorIds: 1, kind: 1, status: 1 })
 contentSchema.index({ directorIds: 1, kind: 1, status: 1 })
 contentSchema.index({ visibility: 1, status: 1 })
 contentSchema.index({ createdAt: -1 })
+// Admin lists do not constrain publication visibility. Keep dedicated indexes
+// so their updated-first sort never walks the complete public-feed indexes.
+contentSchema.index({
+  kind: 1,
+  deletedAt: 1,
+  updatedAt: -1,
+  createdAt: -1,
+  _id: -1,
+})
+contentSchema.index({
+  kind: 1,
+  status: 1,
+  deletedAt: 1,
+  updatedAt: -1,
+  createdAt: -1,
+  _id: -1,
+})
+contentSchema.index({ deletedAt: 1, kind: 1 })
+contentSchema.index({ createdAt: 1, deletedAt: 1 })
+contentSchema.index(
+  { title: "text", slug: "text", description: "text" },
+  {
+    name: "admin_content_search",
+    weights: { slug: 10, title: 5, description: 1 },
+  }
+)
+contentSchema.index({
+  kind: 1,
+  status: 1,
+  visibility: 1,
+  deletedAt: 1,
+  actressCount: 1,
+  createdAt: -1,
+  _id: -1,
+})
+contentSchema.index({
+  kind: 1,
+  status: 1,
+  visibility: 1,
+  deletedAt: 1,
+  actressCount: 1,
+  "metadata.releaseDate": -1,
+  _id: -1,
+})
 // Public feeds page before joining channel/media/term references.
 contentSchema.index({
   kind: 1,
@@ -120,6 +167,14 @@ contentSchema.index({
   visibility: 1,
   deletedAt: 1,
   createdAt: -1,
+  _id: -1,
+})
+contentSchema.index({
+  kind: 1,
+  status: 1,
+  visibility: 1,
+  deletedAt: 1,
+  updatedAt: -1,
   _id: -1,
 })
 contentSchema.index({

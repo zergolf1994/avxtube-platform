@@ -74,6 +74,31 @@ const QUEUE_IMPORT_STATUSES = [
 ] as const
 
 router.post(
+  "/queue/retry-failed",
+  async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await QueueImportModel.updateMany(
+        { status: "failed" },
+        {
+          $set: { status: "pending" },
+          $unset: {
+            workerId: 1,
+            startedAt: 1,
+            failedAt: 1,
+            completedAt: 1,
+            error: 1,
+          },
+        }
+      )
+      queueCountCache.clear()
+      res.status(200).json({ returnedToQueue: result.modifiedCount })
+    } catch (error) {
+      next(error)
+    }
+  }
+)
+
+router.post(
   "/queue/:id/retry",
   async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
     try {

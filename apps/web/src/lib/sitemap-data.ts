@@ -47,7 +47,7 @@ async function fetchSitemapData<Result>(path: string): Promise<Result> {
     new URL(`/${apiVersion}/sitemap${path}`, apiOrigin),
     {
       headers: { accept: "application/json" },
-      cache: "no-store",
+      next: { revalidate: 21_600 },
     }
   )
   if (!response.ok) throw new Error(`Sitemap API returned ${response.status}`)

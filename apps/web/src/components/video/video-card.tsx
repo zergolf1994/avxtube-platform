@@ -5,6 +5,7 @@ import type { Video } from "@workspace/core/types"
 import { BadgeCheck, EllipsisVertical, Play } from "lucide-react"
 
 import { Link } from "@/i18n/navigation"
+import { LazyVideoPreview } from "./lazy-video-preview"
 
 type VideoCardProps = {
   video: Video
@@ -43,25 +44,11 @@ export function VideoCard({
   verifiedLabel,
   hideAvatar = false,
 }: VideoCardProps) {
-  const previewRef = React.useRef<HTMLVideoElement>(null)
   const [previewActive, setPreviewActive] = React.useState(false)
   const [previewPlaying, setPreviewPlaying] = React.useState(false)
-  const [previewFailed, setPreviewFailed] = React.useState(false)
-  const canPreview = Boolean(video.previewUrl) && !previewFailed
+  const canPreview = Boolean(video.previewUrl)
   const showUncensoredLeak =
     video.category.trim().toLocaleLowerCase() === "uncensored leak"
-
-  React.useEffect(() => {
-    const player = previewRef.current
-    if (!player) return
-    if (!previewActive) {
-      player.pause()
-      player.currentTime = 0
-      return
-    }
-    player.currentTime = 0
-    void player.play().catch(() => setPreviewPlaying(false))
-  }, [previewActive])
 
   function startPreview(event: React.PointerEvent<HTMLElement>) {
     if (event.pointerType === "mouse" && canPreview) setPreviewActive(true)
@@ -80,33 +67,13 @@ export function VideoCard({
     >
       <Link href={href} aria-label={video.title} className="block">
         <div className="relative aspect-video overflow-hidden rounded-xl bg-muted">
-          {/* Media can come from configured storage or a remote provider. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={video.thumbnailUrl || undefined}
-            alt=""
-            loading="lazy"
-            className={`size-full object-cover transition-[transform,opacity] duration-300 group-hover:scale-[1.02] ${previewPlaying ? "opacity-0" : "opacity-100"}`}
+          <LazyVideoPreview
+            posterUrl={video.thumbnailUrl}
+            previewUrl={video.previewUrl}
+            active={previewActive}
+            onPlayingChange={setPreviewPlaying}
+            imageClassName="group-hover:scale-[1.02]"
           />
-          {canPreview ? (
-            <video
-              ref={previewRef}
-              src={video.previewUrl}
-              muted
-              loop
-              playsInline
-              preload="none"
-              poster={video.thumbnailUrl}
-              aria-hidden="true"
-              onPlaying={() => setPreviewPlaying(true)}
-              onError={() => {
-                setPreviewFailed(true)
-                setPreviewActive(false)
-                setPreviewPlaying(false)
-              }}
-              className={`absolute inset-0 size-full object-cover transition-opacity duration-200 ${previewPlaying ? "opacity-100" : "opacity-0"}`}
-            />
-          ) : null}
           <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" />
           {showUncensoredLeak ? (
             <span className="absolute top-3 left-3 rounded-full bg-black/55 px-2 py-1 text-[10px] font-semibold text-white backdrop-blur-sm">
@@ -132,8 +99,15 @@ export function VideoCard({
           >
             {video.channel.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={video.channel.avatarUrl} alt="" loading="lazy" className="size-full rounded-full object-cover" />
-            ) : getInitials(video.channel.name)}
+              <img
+                src={video.channel.avatarUrl}
+                alt=""
+                loading="lazy"
+                className="size-full rounded-full object-cover"
+              />
+            ) : (
+              getInitials(video.channel.name)
+            )}
           </Link>
         ) : null}
         <div className="min-w-0 flex-1">

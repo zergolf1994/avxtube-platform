@@ -1,9 +1,9 @@
 import { Router } from "express"
-import { ChannelModel } from "@workspace/db/models"
 import { CHANNEL_KINDS, CHANNEL_ROLES } from "@workspace/core/types/channel"
 import {
   escapeRegExp,
   getPublicContents,
+  getPublicContentSummaries,
   getContentMappers,
   publicVideoFilter,
   stringValue,
@@ -13,11 +13,17 @@ import {
 } from "../services/content-video.service"
 import {
   getPublicChannels,
+  countPublicChannels,
   mapChannel,
   publicChannelFilter,
 } from "../services/channel-viewer.service"
 
 const router: Router = Router()
+const CHANNEL_DETAIL_CACHE_MS = 2 * 60_000
+const channelDetailCache = new Map<
+  string,
+  { expiresAt: number; pending: Promise<Record<string, unknown> | null> }
+>()
 
 router.get("/", async (req, res) => {
   const filter = publicChannelFilter()
@@ -57,7 +63,7 @@ router.get("/", async (req, res) => {
   )
   const [rows, total] = await Promise.all([
     getPublicChannels(filter, limit, offset),
-    ChannelModel.countDocuments(filter),
+    countPublicChannels(filter),
   ])
   res.json({
     channels: rows.map(mapChannel),
@@ -69,28 +75,86 @@ router.get("/", async (req, res) => {
 
 router.get("/:handle", async (req, res) => {
   const handle = req.params.handle.replace(/^@/, "").toLowerCase()
-  const [row] = await getPublicChannels(
-    { ...publicChannelFilter(), $or: [{ handle }, { _id: req.params.handle }] },
-    1
+  res.setHeader(
+    "Cache-Control",
+    "public, max-age=30, stale-while-revalidate=120"
   )
-  if (!row) {
+  const cached = channelDetailCache.get(handle)
+  if (cached && cached.expiresAt > Date.now()) {
+    const payload = await cached.pending
+    if (!payload) {
+      res.status(404).json({ error: "Channel not found" })
+      return
+    }
+    res.json(payload)
+    return
+  }
+
+  const pending = loadChannelDetail(handle, req.params.handle).catch(
+    (error) => {
+      channelDetailCache.delete(handle)
+      throw error
+    }
+  )
+  if (channelDetailCache.size >= 500) channelDetailCache.clear()
+  channelDetailCache.set(handle, {
+    expiresAt: Date.now() + CHANNEL_DETAIL_CACHE_MS,
+    pending,
+  })
+  const payload = await pending
+  if (!payload) {
+    channelDetailCache.delete(handle)
     res.status(404).json({ error: "Channel not found" })
     return
   }
-  const channel = mapChannel(row)
-  const { mapVideo, mapShort } = await getContentMappers()
-  const [videos, shorts, posts] = await Promise.all(
-    ["video", "short", "post"].map((kind) =>
-      getPublicContents(
-        { ...publicVideoFilter(kind), ...contentChannelFilter(channel.id) },
-        48
-      )
-    )
+  res.json(payload)
+})
+
+async function loadChannelDetail(handle: string, rawHandle: string) {
+  const [row] = await getPublicChannels(
+    { ...publicChannelFilter(), $or: [{ handle }, { _id: rawHandle }] },
+    1,
+    0,
+    { includeContentStats: true }
   )
-  res.json({
+  if (!row) return null
+  const channel = mapChannel(row)
+  const enabledTabs = new Set(channel.enabledTabs)
+  const { mapVideo, mapVideoSummary, mapShortSummary } =
+    await getContentMappers()
+  const [videos, shorts, posts] = await Promise.all([
+    enabledTabs.has("home") || enabledTabs.has("videos")
+      ? getPublicContentSummaries(
+          {
+            ...publicVideoFilter("video"),
+            ...contentChannelFilter(channel.id),
+          },
+          48
+        )
+      : [],
+    enabledTabs.has("shorts")
+      ? getPublicContentSummaries(
+          {
+            ...publicVideoFilter("short"),
+            ...contentChannelFilter(channel.id),
+          },
+          48
+        )
+      : [],
+    enabledTabs.has("posts")
+      ? getPublicContents(
+          {
+            ...publicVideoFilter("post"),
+            ...contentChannelFilter(channel.id),
+          },
+          48
+        )
+      : [],
+  ])
+  return {
     channel,
-    videos: (videos ?? []).map(mapVideo),
-    shorts: (shorts ?? []).map(mapShort),
+    videos: (videos ?? []).map(mapVideoSummary),
+    shorts: (shorts ?? []).map(mapShortSummary),
     playlists: [],
     courses: [],
     posts: (posts ?? []).map((content) => {
@@ -104,7 +168,7 @@ router.get("/:handle", async (req, res) => {
         commentCount: numberValue(toRecord(content.stats).commentCount),
       }
     }),
-  })
-})
+  }
+}
 
 export default router

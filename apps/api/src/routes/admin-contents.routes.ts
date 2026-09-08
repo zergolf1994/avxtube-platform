@@ -17,8 +17,19 @@ import {
   resolveContentRelations,
 } from "../services/content-relations.service"
 import { getDomainSettings } from "../services/settings/domain-setting.service"
+import { invalidatePublicContentCountCache } from "../services/content-video.service"
+import {
+  countAdminContents,
+  getAdminDashboardSummary,
+  invalidateAdminContentCaches,
+} from "../services/admin-content-performance.service"
 
 const router: Router = Router()
+
+type AdminContentListDocument = Record<string, unknown> & {
+  mediaIds?: unknown[]
+  slug?: string
+}
 
 router.use(authenticateUser, requireAdmin)
 
@@ -27,44 +38,20 @@ router.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const date = bangkokDateInput(req.query.date)
-      const start = new Date(`${date}T00:00:00.000+07:00`)
-      const end = new Date(start)
-      end.setTime(end.getTime() + 24 * 60 * 60 * 1_000)
-      const grouped = await ContentModel.aggregate<{
-        _id: number
-        count: number
-      }>([
-        {
-          $match: {
-            createdAt: { $gte: start, $lt: end },
-            deletedAt: { $exists: false },
-          },
-        },
-        {
-          $group: {
-            _id: {
-              $hour: { date: "$createdAt", timezone: "Asia/Bangkok" },
-            },
-            count: { $sum: 1 },
-          },
-        },
-        { $sort: { _id: 1 } },
-      ]).exec()
-      const counts = new Map(grouped.map((item) => [item._id, item.count]))
-      const hours = Array.from({ length: 24 }, (_, hour) => ({
-        hour,
-        count: counts.get(hour) ?? 0,
-      }))
-      const bangkokNow = new Date(Date.now() + 7 * 60 * 60 * 1_000)
+      res.status(200).json((await getAdminDashboardSummary(date)).hourly)
+    } catch (error) {
+      next(error)
+    }
+  }
+)
 
-      res.status(200).json({
-        date,
-        timeZone: "Asia/Bangkok",
-        currentDate: bangkokNow.toISOString().slice(0, 10),
-        currentHour: bangkokNow.getUTCHours(),
-        total: hours.reduce((sum, item) => sum + item.count, 0),
-        hours,
-      })
+router.get(
+  "/stats/summary",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const date = bangkokDateInput(req.query.date)
+      res.setHeader("Cache-Control", "private, max-age=30")
+      res.status(200).json(await getAdminDashboardSummary(date))
     } catch (error) {
       next(error)
     }
@@ -79,26 +66,48 @@ router.get("/", async (req: Request, res: Response, next: NextFunction) => {
       typeof req.query.query === "string" ? req.query.query.trim() : ""
     const page = positiveInteger(req.query.page, 1)
     const limit = Math.min(positiveInteger(req.query.limit, 20), 100)
-    const filter: Record<string, unknown> = { deletedAt: { $exists: false } }
+    const filter: Record<string, unknown> = { deletedAt: null }
 
     if (kind) filter.kind = kind
     if (status) filter.status = status
     if (query) {
-      const pattern = new RegExp(escapeRegExp(query), "i")
-      filter.$or = [
-        { title: pattern },
-        { slug: pattern },
-        { description: pattern },
-      ]
+      const slug = normalizeSlug(query)
+      if (slug && /\d/.test(query) && /^[a-z0-9\s_-]+$/i.test(query)) {
+        filter.slug = new RegExp(`^${escapeRegExp(slug)}`)
+      } else {
+        filter.$text = { $search: query }
+      }
     }
 
     const [items, total, domainSettings] = await Promise.all([
-      ContentModel.find(filter)
-        .sort({ updatedAt: -1, createdAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .lean(),
-      ContentModel.countDocuments(filter),
+      ContentModel.aggregate<AdminContentListDocument>([
+        { $match: filter },
+        { $sort: { updatedAt: -1, createdAt: -1, _id: -1 } },
+        { $skip: (page - 1) * limit },
+        { $limit: limit },
+        {
+          $project: {
+            _id: 1,
+            kind: 1,
+            status: 1,
+            visibility: 1,
+            title: 1,
+            slug: 1,
+            description: {
+              $substrCP: [{ $ifNull: ["$description", ""] }, 0, 240],
+            },
+            mediaIds: 1,
+            "metadata.thumbnailUrl": 1,
+            "metadata.posterUrl": 1,
+            createdAt: 1,
+            updatedAt: 1,
+          },
+        },
+      ]).exec(),
+      countAdminContents(
+        JSON.stringify([kind ?? "all", status ?? "all", query]),
+        filter
+      ),
       getDomainSettings(),
     ])
 
@@ -195,6 +204,8 @@ router.post("/", async (req: Request, res: Response, next: NextFunction) => {
       createdBy: actor.id,
     })
     await linkContentMedia(content._id, input.mediaIds)
+    invalidatePublicContentCountCache()
+    invalidateAdminContentCaches()
 
     res.status(201).json({ content: content.toObject() })
   } catch (error) {
@@ -247,6 +258,8 @@ router.patch(
       }
 
       await linkContentMedia(content._id, input.mediaIds)
+      invalidatePublicContentCountCache()
+      invalidateAdminContentCaches()
 
       res.status(200).json({ content })
     } catch (error) {

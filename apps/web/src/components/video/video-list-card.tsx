@@ -5,6 +5,7 @@ import type { Video } from "@workspace/core/types"
 import * as React from "react"
 
 import { Link } from "@/i18n/navigation"
+import { LazyVideoPreview } from "./lazy-video-preview"
 
 export function VideoListCard({
   video,
@@ -19,23 +20,9 @@ export function VideoListCard({
   variant?: "default" | "search"
   publishedLabel?: string
 }) {
-  const previewRef = React.useRef<HTMLVideoElement>(null)
   const [previewActive, setPreviewActive] = React.useState(false)
   const [previewPlaying, setPreviewPlaying] = React.useState(false)
-  const [previewFailed, setPreviewFailed] = React.useState(false)
-  const canPreview = Boolean(video.previewUrl) && !previewFailed
-
-  React.useEffect(() => {
-    const player = previewRef.current
-    if (!player) return
-    if (!previewActive) {
-      player.pause()
-      player.currentTime = 0
-      return
-    }
-    player.currentTime = 0
-    void player.play().catch(() => setPreviewPlaying(false))
-  }, [previewActive])
+  const canPreview = Boolean(video.previewUrl)
 
   return (
     <article
@@ -61,30 +48,13 @@ export function VideoListCard({
             : "relative block aspect-video w-full shrink-0 overflow-hidden bg-muted sm:w-40 sm:rounded-lg"
         }
       >
-        <img
-          src={video.thumbnailUrl || undefined}
-          alt=""
-          loading="lazy"
-          className={`size-full object-cover transition-[transform,opacity] duration-200 group-hover:scale-105 ${previewPlaying ? "opacity-0" : "opacity-100"}`}
+        <LazyVideoPreview
+          posterUrl={video.thumbnailUrl}
+          previewUrl={video.previewUrl}
+          active={previewActive}
+          onPlayingChange={setPreviewPlaying}
+          imageClassName="group-hover:scale-105"
         />
-        {canPreview && previewActive ? (
-          <video
-            ref={previewRef}
-            src={video.previewUrl}
-            muted
-            loop
-            playsInline
-            preload="none"
-            aria-hidden="true"
-            onPlaying={() => setPreviewPlaying(true)}
-            onError={() => {
-              setPreviewFailed(true)
-              setPreviewActive(false)
-              setPreviewPlaying(false)
-            }}
-            className={`absolute inset-0 size-full object-cover transition-opacity duration-200 ${previewPlaying ? "opacity-100" : "opacity-0"}`}
-          />
-        ) : null}
         <span className="absolute right-2 bottom-2 rounded bg-black/80 px-1.5 py-0.5 text-xs font-semibold text-white">
           {formatDuration(video.durationSeconds)}
         </span>

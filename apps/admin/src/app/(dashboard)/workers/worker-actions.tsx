@@ -1,7 +1,6 @@
 "use client"
 
 import { Power, Trash2 } from "lucide-react"
-import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
 import * as React from "react"
 
@@ -12,14 +11,15 @@ export function WorkerActions({
   name,
   enabled,
   canDelete,
+  onChanged,
 }: {
   id: string
   name: string
   enabled: boolean
   canDelete: boolean
+  onChanged?: () => void | Promise<void>
 }) {
   const t = useTranslations("admin.workers")
-  const router = useRouter()
   const [pending, setPending] = React.useState<"toggle" | "delete" | null>(null)
   const [error, setError] = React.useState("")
 
@@ -53,7 +53,7 @@ export function WorkerActions({
           result?.error ?? `Worker request failed (${response.status})`
         )
       }
-      router.refresh()
+      await onChanged?.()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t("actionFailed"))
     } finally {

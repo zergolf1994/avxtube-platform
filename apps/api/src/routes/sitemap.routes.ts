@@ -3,7 +3,7 @@ import { ChannelModel, ContentModel } from "@workspace/db/models"
 
 import {
   getContentMappers,
-  getPublicContents,
+  getPublicContentSummaries,
   publicVideoFilter,
   stringValue,
 } from "../services/content-video.service"
@@ -72,15 +72,16 @@ router.get("/:type", async (req, res, next) => {
       ...publicVideoFilter(kind),
       slug: { $type: "string" as const, $ne: "" },
     }
-    const [rows, total, { mapVideo, mapShort }] = await Promise.all([
-      getPublicContents(filter, pageSize, offset, {
-        updatedAt: -1,
-        _id: -1,
-      }),
-      ContentModel.countDocuments(filter),
-      getContentMappers(),
-    ])
-    const mapper = kind === "video" ? mapVideo : mapShort
+    const [rows, total, { mapVideoSummary, mapShortSummary }] =
+      await Promise.all([
+        getPublicContentSummaries(filter, pageSize, offset, {
+          updatedAt: -1,
+          _id: -1,
+        }),
+        ContentModel.countDocuments(filter),
+        getContentMappers(),
+      ])
+    const mapper = kind === "video" ? mapVideoSummary : mapShortSummary
     res.json({
       type,
       page,

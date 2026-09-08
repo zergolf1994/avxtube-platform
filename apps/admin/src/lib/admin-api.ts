@@ -39,6 +39,19 @@ export type HourlyContentStats = {
   hours: Array<{ hour: number; count: number }>
 }
 
+export type AdminDashboardSummary = {
+  totals: Record<string, number>
+  hourly: HourlyContentStats
+}
+
+export async function getAdminDashboardSummary(
+  date: string
+): Promise<AdminDashboardSummary> {
+  const url = new URL("/v1/admin/contents/stats/summary", apiUrl)
+  url.searchParams.set("date", date)
+  return fetchAdmin<AdminDashboardSummary>(url)
+}
+
 export async function getHourlyContentStats(
   date: string
 ): Promise<HourlyContentStats> {

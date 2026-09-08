@@ -28,14 +28,7 @@ router.get("/", async (req: Request, res: Response, next: NextFunction) => {
     const filter: Record<string, unknown> = {
       ...(taxonomy ? { taxonomy } : {}),
       ...(status ? { status } : {}),
-      ...(query
-        ? {
-            $or: [
-              { name: new RegExp(escapeRegExp(query), "i") },
-              { slug: new RegExp(escapeRegExp(query), "i") },
-            ],
-          }
-        : {}),
+      ...(query ? { $text: { $search: query } } : {}),
     }
     const [items, total] = await Promise.all([
       TermModel.find(filter)

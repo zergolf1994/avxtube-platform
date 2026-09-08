@@ -9,8 +9,10 @@ import {
 } from "../middlewares/user-access.middleware"
 import {
   findPublicVideo,
-  getPublicContents,
+  getPublicContentSummaries,
+  countPublicContents,
   getContentMappers,
+  hasMaterializedActressCounts,
   normalizeContentLocale,
   publicVideoFilter,
   publicVideoListFilter,
@@ -18,7 +20,7 @@ import {
   stringValue,
   numberValue,
   toRecord,
-  contentPagePipeline,
+  contentSummaryPagePipeline,
 } from "../services/content-video.service"
 import {
   createVideoComment,
@@ -34,6 +36,14 @@ import {
 const router: Router = Router()
 const WATCH_CORE_CACHE_MS = 30_000
 const RELATED_POOL_CACHE_MS = 5 * 60_000
+const VIDEO_PAGE_CACHE_MS = 30_000
+const videoPageCache = new Map<
+  string,
+  {
+    expiresAt: number
+    pending: Promise<{ videos: Video[]; total: number }>
+  }
+>()
 type WatchCore = {
   content: Record<string, unknown>
   relatedContents: Record<string, unknown>[]
@@ -78,18 +88,57 @@ router.get("/", async (req: Request, res: Response, next: NextFunction) => {
       return
     }
     if (categoryId) filter.termIds = categoryId
-    if (req.query.actress === "single") {
-      filter["actressIds.0"] = { $exists: true }
-      filter["actressIds.1"] = { $exists: false }
-    } else if (req.query.actress === "multiple") {
-      filter["actressIds.1"] = { $exists: true }
+    const actressFilter =
+      req.query.actress === "single" || req.query.actress === "multiple"
+        ? req.query.actress
+        : null
+    if (actressFilter) {
+      if (await hasMaterializedActressCounts()) {
+        filter.actressCount = actressFilter === "single" ? 1 : { $gte: 2 }
+      } else if (actressFilter === "single") {
+        filter["actressIds.0"] = { $exists: true }
+        filter["actressIds.1"] = { $exists: false }
+      } else {
+        filter["actressIds.1"] = { $exists: true }
+      }
     }
-    const [contents, total, { mapVideo }] = await Promise.all([
-      getPublicContents(filter, limit, cursor, sort),
-      ContentModel.countDocuments(filter),
-      getContentMappers(locale),
-    ])
-    const videos = contents.map(mapVideo)
+    const cacheKey = JSON.stringify({
+      locale: locale ?? "en",
+      cursor,
+      limit,
+      sort: req.query.sort ?? "latest",
+      category: requestedCategory,
+      actress: actressFilter ?? "all",
+      paginated,
+    })
+    const cached = videoPageCache.get(cacheKey)
+    let pending =
+      cached && cached.expiresAt > Date.now() ? cached.pending : undefined
+    if (!pending) {
+      pending = Promise.all([
+        getPublicContentSummaries(filter, limit, cursor, sort),
+        countPublicContents(filter),
+        getContentMappers(locale),
+      ])
+        .then(([contents, total, { mapVideoSummary }]) => ({
+          videos: contents.map(mapVideoSummary),
+          total,
+        }))
+        .catch((error) => {
+          videoPageCache.delete(cacheKey)
+          throw error
+        })
+      if (videoPageCache.size >= 500) videoPageCache.clear()
+      videoPageCache.set(cacheKey, {
+        expiresAt: Date.now() + VIDEO_PAGE_CACHE_MS,
+        pending,
+      })
+    }
+    const { videos, total } = await pending
+    res.setHeader(
+      "Cache-Control",
+      "public, max-age=10, stale-while-revalidate=30"
+    )
 
     if (!paginated) {
       res.status(200).json({ videos, total })
@@ -203,12 +252,12 @@ router.get(
         ...publicVideoFilter(),
         _id: { $ne: stringValue(video._id) },
       }
-      const [contents, total, { mapVideo }] = await Promise.all([
-        getPublicContents(filter, limit, cursor),
-        ContentModel.countDocuments(filter),
+      const [contents, total, { mapVideoSummary }] = await Promise.all([
+        getPublicContentSummaries(filter, limit, cursor),
+        countPublicContents(filter),
         getContentMappers(),
       ])
-      const items = contents.map(mapVideo)
+      const items = contents.map(mapVideoSummary)
       const nextOffset = cursor + items.length
       res.status(200).json({
         items,
@@ -394,7 +443,7 @@ async function getRandomRelatedContents(excludedId: string, limit: number) {
   const seed = randomUUID()
   const findRange = (range: Record<string, string>) =>
     ContentModel.aggregate<Record<string, unknown>>(
-      contentPagePipeline(
+      contentSummaryPagePipeline(
         {
           ...publicVideoFilter(),
           _id: { ...range, ...(excludedId ? { $ne: excludedId } : {}) },

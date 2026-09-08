@@ -26,7 +26,8 @@ const termSchema = new Schema(
 )
 
 termSchema.index({ taxonomy: 1, slug: 1 }, { unique: true })
-termSchema.index({ taxonomy: 1, status: 1, name: 1 })
+termSchema.index({ taxonomy: 1, status: 1, name: 1, _id: 1 })
+termSchema.index({ taxonomy: 1, name: 1, _id: 1 })
 termSchema.index({ name: "text", slug: "text" })
 
 export type TermSchemaType = InferSchemaType<typeof termSchema>

@@ -39,11 +39,12 @@ function createSettingsApiUrl(path = ""): URL {
 }
 
 async function fetchJson<ResponseBody>(url: URL): Promise<ResponseBody> {
-  const response = await fetch(url, {
+  const request: RequestInit = {
     method: "GET",
     headers: { accept: "application/json" },
-    cache: "no-store",
-  })
+    next: { revalidate: 60 },
+  } as RequestInit
+  const response = await fetch(url, request)
 
   if (!response.ok) {
     throw new Error(

@@ -211,20 +211,50 @@ function ContentInformation({
 
 function Poster({ content }: { content: AdminContent }) {
   const source = mediaUrl(content)
+  const viewportRef = React.useRef<HTMLDivElement>(null)
+  const [visible, setVisible] = React.useState(false)
+  const [loaded, setLoaded] = React.useState(false)
+
+  React.useEffect(() => {
+    const target = viewportRef.current
+    if (!target) return
+    if (!("IntersectionObserver" in window)) {
+      setVisible(true)
+      return
+    }
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry?.isIntersecting) return
+      setVisible(true)
+      observer.disconnect()
+    })
+    observer.observe(target)
+    return () => observer.disconnect()
+  }, [])
+
   return (
-    <div className="aspect-video w-16 overflow-hidden rounded-md bg-muted">
-      {source ? (
-        <div
-          role="img"
-          aria-label={content.title || content.slug || content._id}
-          className="size-full bg-cover bg-center"
-          style={{ backgroundImage: `url(${JSON.stringify(source)})` }}
+    <div
+      ref={viewportRef}
+      className="relative aspect-video w-16 overflow-hidden rounded-md bg-muted"
+    >
+      {source && visible ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={source}
+          alt={content.title || content.slug || content._id}
+          loading="eager"
+          decoding="async"
+          onLoad={() => setLoaded(true)}
+          onError={() => setLoaded(true)}
+          className="size-full object-cover"
         />
       ) : (
         <div className="grid size-full place-items-center text-muted-foreground">
           <FileVideo className="size-4" />
         </div>
       )}
+      {source && visible && !loaded ? (
+        <span className="absolute inset-0 animate-pulse bg-gradient-to-r from-muted via-muted-foreground/10 to-muted" />
+      ) : null}
     </div>
   )
 }

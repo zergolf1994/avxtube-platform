@@ -14,8 +14,12 @@ export async function getContentMappers(locale?: string) {
   return {
     mapVideo: (content: Record<string, unknown>) =>
       mapContentToVideo(content, domain_static, domain_playlist, locale),
+    mapVideoSummary: (content: Record<string, unknown>) =>
+      mapContentToVideoSummary(content, domain_static, domain_playlist, locale),
     mapShort: (content: Record<string, unknown>) =>
       mapContentToShort(content, domain_static, domain_playlist, locale),
+    mapShortSummary: (content: Record<string, unknown>) =>
+      mapContentToShortSummary(content, domain_static, domain_playlist, locale),
   }
 }
 
@@ -45,7 +49,7 @@ export function publicVideoListFilter(sort?: unknown): Record<string, unknown> {
 
 // Join only the requested page, using each related collection's _id index.
 // Never return complete media metadata (tokens, referrers, etc.) to the viewer.
-export function contentLookups(): PipelineStage[] {
+export function contentLookups(summary = false): PipelineStage[] {
   return [
     {
       $set: {
@@ -54,7 +58,7 @@ export function contentLookups(): PipelineStage[] {
             { $ifNull: ["$studioIds", []] },
             { $ifNull: ["$actressIds", []] },
             { $ifNull: ["$actorIds", []] },
-            { $ifNull: ["$directorIds", []] },
+            ...(summary ? [] : [{ $ifNull: ["$directorIds", []] }]),
             { $ifNull: ["$channelIds", []] },
           ],
         },
@@ -123,6 +127,7 @@ export function contentLookups(): PipelineStage[] {
         foreignField: "_id",
         pipeline: [
           { $match: { status: "active", deletedAt: null } },
+          ...(summary ? [{ $match: { taxonomy: "category" } }] : []),
           { $project: { name: 1, slug: 1, taxonomy: 1 } },
         ],
         as: "terms",
@@ -172,6 +177,44 @@ export function contentPagePipeline(
   ]
 }
 
+export function contentSummaryPagePipeline(
+  filter: Record<string, unknown>,
+  limit = 24,
+  offset = 0,
+  sort: Record<string, 1 | -1> | null = { createdAt: -1, _id: -1 }
+): PipelineStage[] {
+  return [
+    { $match: filter },
+    ...(sort ? [{ $sort: sort } as PipelineStage.Sort] : []),
+    { $skip: offset },
+    { $limit: limit },
+    ...contentLookups(true),
+    {
+      $project: {
+        _id: 1,
+        kind: 1,
+        title: 1,
+        translated: 1,
+        slug: 1,
+        createdAt: 1,
+        stats: 1,
+        studioIds: 1,
+        actressIds: 1,
+        actorIds: 1,
+        channelIds: 1,
+        mediaIds: 1,
+        termIds: 1,
+        "metadata.dvdId": 1,
+        "metadata.commentPolicy": 1,
+        "metadata.releaseDate": 1,
+        channels: 1,
+        media: 1,
+        terms: 1,
+      },
+    },
+  ]
+}
+
 export function getPublicContents(
   filter: Record<string, unknown> = publicVideoFilter(),
   limit = 24,
@@ -183,6 +226,58 @@ export function getPublicContents(
   ).exec()
 }
 
+export function getPublicContentSummaries(
+  filter: Record<string, unknown> = publicVideoFilter(),
+  limit = 24,
+  offset = 0,
+  sort?: Record<string, 1 | -1> | null
+) {
+  return ContentModel.aggregate<Record<string, unknown>>(
+    contentSummaryPagePipeline(filter, limit, offset, sort)
+  ).exec()
+}
+
+const PUBLIC_CONTENT_COUNT_CACHE_MS = 5 * 60_000
+const publicContentCountCache = new Map<
+  string,
+  { expiresAt: number; pending: Promise<number> }
+>()
+
+// Exact counts walk a large portion of the public index. Page navigation does
+// not need a brand-new total on every request, so coalesce concurrent callers
+// and reuse the result briefly.
+export function countPublicContents(filter: Record<string, unknown>) {
+  const key = JSON.stringify(filter)
+  const cached = publicContentCountCache.get(key)
+  if (cached && cached.expiresAt > Date.now()) return cached.pending
+
+  const pending = ContentModel.countDocuments(filter).catch((error) => {
+    publicContentCountCache.delete(key)
+    throw error
+  })
+  if (publicContentCountCache.size >= 100) publicContentCountCache.clear()
+  publicContentCountCache.set(key, {
+    expiresAt: Date.now() + PUBLIC_CONTENT_COUNT_CACHE_MS,
+    pending,
+  })
+  return pending
+}
+
+export function invalidatePublicContentCountCache() {
+  publicContentCountCache.clear()
+}
+
+let materializedActressCountReady: Promise<boolean> | null = null
+
+// This allows the new indexed filter to be deployed before the one-time
+// actressCount backfill without hiding legacy content.
+export function hasMaterializedActressCounts() {
+  materializedActressCountReady ??= ContentModel.exists({
+    actressCount: { $exists: false },
+  }).then((row) => row === null)
+  return materializedActressCountReady
+}
+
 export async function findPublicVideo(
   idOrSlug: string,
   kind = "video"
@@ -190,7 +285,7 @@ export async function findPublicVideo(
   const normalized = idOrSlug.trim().toLowerCase()
   const identity = UUID_PATTERN.test(normalized)
     ? { _id: normalized }
-    : { slug: normalized }
+    : { slug: { $eq: normalized, $type: "string" } }
   const [content] = await getPublicContents(
     { ...publicVideoFilter(kind), ...identity },
     1,
@@ -334,6 +429,46 @@ export function mapContentToShort(
   const policy = toRecord(content.metadata).commentPolicy
   return {
     ...mapContentToVideo(content, staticDomain, playlistDomain, locale),
+    likeCount: numberValue(stats.likeCount),
+    commentCount: numberValue(stats.commentCount),
+    shareCount: numberValue(stats.shareCount),
+    commentPolicy:
+      policy === "disabled" || policy === "review" ? policy : "enabled",
+  }
+}
+
+export function mapContentToVideoSummary(
+  content: Record<string, unknown>,
+  staticDomain = "",
+  playlistDomain = "",
+  locale?: string
+): Video {
+  const video = mapContentToVideo(content, staticDomain, playlistDomain, locale)
+  return {
+    id: video.id,
+    title: video.title,
+    description: "",
+    thumbnailUrl: video.thumbnailUrl,
+    durationSeconds: video.durationSeconds,
+    viewCount: video.viewCount,
+    publishedAt: video.publishedAt,
+    category: video.category,
+    ...(video.releaseDate ? { releaseDate: video.releaseDate } : {}),
+    ...(video.previewUrl ? { previewUrl: video.previewUrl } : {}),
+    ...(video.channel ? { channel: video.channel } : {}),
+  }
+}
+
+export function mapContentToShortSummary(
+  content: Record<string, unknown>,
+  staticDomain = "",
+  playlistDomain = "",
+  locale?: string
+): Short {
+  const stats = toRecord(content.stats)
+  const policy = toRecord(content.metadata).commentPolicy
+  return {
+    ...mapContentToVideoSummary(content, staticDomain, playlistDomain, locale),
     likeCount: numberValue(stats.likeCount),
     commentCount: numberValue(stats.commentCount),
     shareCount: numberValue(stats.shareCount),

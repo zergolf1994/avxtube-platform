@@ -1,9 +1,9 @@
 import { Router } from "express"
-import { ContentModel } from "@workspace/db/models"
 import { mockComments } from "../data/mock-comments"
 import {
   findPublicVideo,
-  getPublicContents,
+  getPublicContentSummaries,
+  countPublicContents,
   getContentMappers,
   publicVideoFilter,
   stringValue,
@@ -20,12 +20,12 @@ router.get("/", async (req, res) => {
   )
   const start = (page - 1) * pageSize
   const filter = publicVideoFilter("short")
-  const [contents, total, { mapShort }] = await Promise.all([
-    getPublicContents(filter, pageSize, start),
-    ContentModel.countDocuments(filter),
+  const [contents, total, { mapShortSummary }] = await Promise.all([
+    getPublicContentSummaries(filter, pageSize, start),
+    countPublicContents(filter),
     getContentMappers(),
   ])
-  const items = contents.map(mapShort)
+  const items = contents.map(mapShortSummary)
   res.json({
     items,
     shorts: items,

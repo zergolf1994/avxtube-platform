@@ -2,7 +2,10 @@ import { ArrowRight, Clapperboard, FileText, Radio, Video } from "lucide-react"
 import { getTranslations } from "next-intl/server"
 import Link from "next/link"
 
-import { getContents, getHourlyContentStats } from "@/lib/admin-api"
+import {
+  getAdminDashboardSummary,
+  type AdminDashboardSummary,
+} from "@/lib/admin-api"
 import { contentKinds, type ContentKind } from "@/lib/content"
 
 import { HourlyContentStatsPanel } from "./hourly-content-stats"
@@ -17,17 +20,19 @@ export default async function DashboardPage({
   const t = await getTranslations("admin")
   const raw = await searchParams
   const date = dashboardDate(Array.isArray(raw.date) ? raw.date[0] : raw.date)
-  const [results, hourlyStats] = await Promise.all([
-    Promise.all(contentKinds.map((kind) => getContents({ kind, limit: 1 }))),
-    getHourlyContentStats(date).catch(() => ({
+  const summary: AdminDashboardSummary = await getAdminDashboardSummary(
+    date
+  ).catch(() => ({
+    totals: {},
+    hourly: {
       date,
       timeZone: "Asia/Bangkok" as const,
       currentDate: "",
       currentHour: 0,
       total: 0,
       hours: Array.from({ length: 24 }, (_, hour) => ({ hour, count: 0 })),
-    })),
-  ])
+    },
+  }))
 
   return (
     <div className="space-y-8">
@@ -41,17 +46,17 @@ export default async function DashboardPage({
         </p>
       </header>
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {contentKinds.map((kind, index) => (
+        {contentKinds.map((kind) => (
           <ContentStat
             key={kind}
             kind={kind}
-            total={results[index]?.total ?? 0}
+            total={summary.totals[kind] ?? 0}
             label={t(`kinds.${kind}`)}
           />
         ))}
       </section>
       <HourlyContentStatsPanel
-        stats={hourlyStats}
+        stats={summary.hourly}
         labels={{
           title: t("hourlyStats.title"),
           description: t("hourlyStats.description"),

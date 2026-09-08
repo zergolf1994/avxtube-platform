@@ -99,6 +99,10 @@
     "retry": "Return to queue",
     "retrying": "Returning...",
     "retryFailed": "Unable to return this item to the queue.",
+    "retryAll": "Return all failed",
+    "retryingAll": "Returning failed items...",
+    "retryAllConfirm": "Return every failed item to the pending queue? Workers may start processing them immediately.",
+    "retryAllFailed": "Unable to return all failed items to the queue.",
     "created": "Added",
     "status": {
       "pending": "Pending",

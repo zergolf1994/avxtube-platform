@@ -3,7 +3,7 @@ import { mockPlaylists } from "../data/mock-playlists"
 
 import {
   getPublicVideoCategories,
-  getPublicContents,
+  getPublicContentSummaries,
   getContentMappers,
   normalizeContentLocale,
   publicVideoFilter,
@@ -15,6 +15,10 @@ const HOME_CACHE_MS = 30_000
 const homeCache = new Map<
   string,
   { expiresAt: number; payload: Record<string, unknown> }
+>()
+const homeFeedPageCache = new Map<
+  string,
+  { expiresAt: number; pending: Promise<Record<string, unknown>> }
 >()
 
 router.get("/", async (req: Request, res: Response, next: NextFunction) => {
@@ -49,21 +53,23 @@ router.get("/", async (req: Request, res: Response, next: NextFunction) => {
 
     const filter: Record<string, unknown> = publicVideoFilter()
     if (categoryId) filter.termIds = categoryId
-    const [contents, shortContents, { mapVideo, mapShort }] = await Promise.all(
-      [
-        getPublicContents(filter, requestedCategory === "all" ? 24 : 48),
+    const [contents, shortContents, { mapVideoSummary, mapShortSummary }] =
+      await Promise.all([
+        getPublicContentSummaries(
+          filter,
+          requestedCategory === "all" ? 24 : 48
+        ),
         requestedCategory === "all"
-          ? getPublicContents(publicVideoFilter("short"), 10)
+          ? getPublicContentSummaries(publicVideoFilter("short"), 10)
           : [],
         getContentMappers(locale),
-      ]
-    )
-    const videos = contents.map(mapVideo)
+      ])
+    const videos = contents.map(mapVideoSummary)
 
     const payload = {
       categories,
       videos,
-      shorts: shortContents.map(mapShort),
+      shorts: shortContents.map(mapShortSummary),
       playlists: [],
     }
     if (homeCache.size > 500) homeCache.clear()
@@ -127,18 +133,43 @@ router.get("/feed", async (req: Request, res: Response, next: NextFunction) => {
           ? { "metadata.releaseDate": -1, _id: -1 }
           : { createdAt: -1, _id: -1 }
     const locale = normalizeContentLocale(req.query.locale)
-    const [{ mapVideo, mapShort }, rows] = await Promise.all([
-      getContentMappers(locale),
-      getPublicContents(filter, pageSize + 1, start, sort),
-    ])
-    const hasMore = rows.length > pageSize
-    const mapper = type === "shorts" ? mapShort : mapVideo
-    res.json({
+    const cacheKey = JSON.stringify({
       type,
       page,
-      items: rows.slice(0, pageSize).map(mapper),
-      nextPage: hasMore ? page + 1 : null,
+      pageSize,
+      categories: categoryIds,
+      sort: req.query.sort ?? "latest",
+      locale: locale ?? "en",
     })
+    const cached = homeFeedPageCache.get(cacheKey)
+    let pending =
+      cached && cached.expiresAt > Date.now() ? cached.pending : undefined
+    if (!pending) {
+      pending = Promise.all([
+        getContentMappers(locale),
+        getPublicContentSummaries(filter, pageSize + 1, start, sort),
+      ])
+        .then(([{ mapVideoSummary, mapShortSummary }, rows]) => {
+          const hasMore = rows.length > pageSize
+          const mapper = type === "shorts" ? mapShortSummary : mapVideoSummary
+          return {
+            type,
+            page,
+            items: rows.slice(0, pageSize).map(mapper),
+            nextPage: hasMore ? page + 1 : null,
+          }
+        })
+        .catch((error) => {
+          homeFeedPageCache.delete(cacheKey)
+          throw error
+        })
+      if (homeFeedPageCache.size >= 500) homeFeedPageCache.clear()
+      homeFeedPageCache.set(cacheKey, {
+        expiresAt: Date.now() + HOME_CACHE_MS,
+        pending,
+      })
+    }
+    res.json(await pending)
   } catch (error) {
     next(error)
   }

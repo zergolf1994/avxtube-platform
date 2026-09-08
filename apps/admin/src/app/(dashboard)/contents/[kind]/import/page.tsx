@@ -11,6 +11,7 @@ import { SitemapImportForm } from "./sitemap-import-form"
 import { QueuePager } from "./queue-pager"
 import { QueueRefreshButton } from "./queue-refresh-button"
 import { RetryQueueImportButton } from "./retry-queue-import-button"
+import { RetryAllQueueImportsButton } from "./retry-all-queue-imports-button"
 import { QueueStatusFilter } from "./queue-status-filter"
 
 const QUEUE_STATUSES: QueueImportStatus[] = [
@@ -114,6 +115,7 @@ export default async function SitemapImportPage({
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <RetryAllQueueImportsButton />
               <QueueRefreshButton />
               <QueueStatusFilter value={status} />
             </div>

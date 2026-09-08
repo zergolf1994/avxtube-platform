@@ -38,14 +38,8 @@ router.get(
       const filter: Record<string, unknown> = {
         ...(kind ? { kind } : {}),
         ...(status ? { status } : {}),
-        ...(query
-          ? {
-              $or: [
-                { name: new RegExp(escapeRegExp(query), "i") },
-                { handle: new RegExp(escapeRegExp(query), "i") },
-              ],
-            }
-          : {}),
+        ...(status && status !== "deleted" ? { deletedAt: null } : {}),
+        ...(query ? { $text: { $search: query } } : {}),
       }
       const [items, total] = await Promise.all([
         ChannelModel.find(filter)

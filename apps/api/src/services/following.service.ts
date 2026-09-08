@@ -7,7 +7,7 @@ import {
 import type { PipelineStage } from "mongoose"
 import {
   getContentMappers,
-  getPublicContents,
+  getPublicContentSummaries,
   isRecord,
   publicVideoFilter,
   contentChannelFilter,
@@ -31,13 +31,13 @@ export async function getUserFollowingFeed(
     ...publicVideoFilter(),
     ...contentChannelFilter(channelIds),
   }
-  const [contents, total, { mapVideo }] = await Promise.all([
-    getPublicContents(filter, Math.min(Math.max(limit, 1), 20)),
+  const [contents, total, { mapVideoSummary }] = await Promise.all([
+    getPublicContentSummaries(filter, Math.min(Math.max(limit, 1), 20)),
     ContentModel.countDocuments(filter),
     getContentMappers(),
   ])
   return {
-    items: contents.map(mapVideo),
+    items: contents.map(mapVideoSummary),
     nextCursor: null,
     total,
   }

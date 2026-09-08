@@ -84,6 +84,7 @@ export function WatchPlayerProvider({
     started: initialState.started,
   })
   const playerSurfaceRef = React.useRef<HTMLElement | null>(null)
+  const homePrefetchedRef = React.useRef(false)
   const miniHistoryModeRef = React.useRef<"back" | "push" | null>(null)
   const currentPathRef = React.useRef(pathname)
   const previousPathRef = React.useRef<string | null>(null)
@@ -107,7 +108,8 @@ export function WatchPlayerProvider({
   }, [])
 
   React.useEffect(() => {
-    if (!pathname.startsWith("/watch")) return
+    if (!pathname.startsWith("/watch") || homePrefetchedRef.current) return
+    homePrefetchedRef.current = true
     // Warm the Home route while the viewer watches. Opening the miniplayer can
     // then swap to the already prepared route instead of waiting for HomeFeed.
     router.prefetch("/")
@@ -206,13 +208,10 @@ export function WatchPlayerProvider({
       }),
     []
   )
-  const setSpeed = React.useCallback(
-    (speed: number) => {
-      latestPlaybackRef.current = { ...latestPlaybackRef.current, speed }
-      setState((current) => ({ ...current, speed }))
-    },
-    []
-  )
+  const setSpeed = React.useCallback((speed: number) => {
+    latestPlaybackRef.current = { ...latestPlaybackRef.current, speed }
+    setState((current) => ({ ...current, speed }))
+  }, [])
   const syncPlayback = React.useCallback(
     (patch: PlayerPlaybackState, surface: PlayerSurface) => {
       if (surface !== activeSurface) return
@@ -220,8 +219,7 @@ export function WatchPlayerProvider({
       const latest: PlayerPlaybackState = {
         ...previous,
         ...patch,
-        started:
-          previous.started === true || patch.started === true,
+        started: previous.started === true || patch.started === true,
       }
       latestPlaybackRef.current = latest
       setState((current) => {
@@ -230,7 +228,8 @@ export function WatchPlayerProvider({
           (typeof patch.isPlaying === "boolean" &&
             patch.isPlaying !== current.isPlaying) ||
           (typeof patch.muted === "boolean" && patch.muted !== current.muted) ||
-          (typeof patch.volume === "number" && patch.volume !== current.volume) ||
+          (typeof patch.volume === "number" &&
+            patch.volume !== current.volume) ||
           (typeof patch.speed === "number" && patch.speed !== current.speed) ||
           (patch.started === true && !current.started)
         const nextTime =
@@ -382,10 +381,7 @@ export function WatchPlayerProvider({
     if (!surface) return
     surface.style.display = "none"
     surface.removeAttribute("aria-label")
-    if (
-      surface.isConnected &&
-      surface.parentElement !== document.body
-    )
+    if (surface.isConnected && surface.parentElement !== document.body)
       document.body.append(surface)
   }, [playerSurface, showPersistentPlayer])
 

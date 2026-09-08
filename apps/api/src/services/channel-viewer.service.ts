@@ -25,6 +25,28 @@ export function publicChannelFilter(): Record<string, unknown> {
   return { status: "active", deletedAt: null }
 }
 
+const CHANNEL_COUNT_CACHE_MS = 5 * 60_000
+const channelCountCache = new Map<
+  string,
+  { expiresAt: number; pending: Promise<number> }
+>()
+
+export function countPublicChannels(filter: Record<string, unknown>) {
+  const key = JSON.stringify(filter)
+  const cached = channelCountCache.get(key)
+  if (cached && cached.expiresAt > Date.now()) return cached.pending
+  const pending = ChannelModel.countDocuments(filter).catch((error) => {
+    channelCountCache.delete(key)
+    throw error
+  })
+  if (channelCountCache.size >= 50) channelCountCache.clear()
+  channelCountCache.set(key, {
+    expiresAt: Date.now() + CHANNEL_COUNT_CACHE_MS,
+    pending,
+  })
+  return pending
+}
+
 export function channelPagePipeline(
   filter: Record<string, unknown>,
   limit = 30,
@@ -52,6 +74,9 @@ export function channelPagePipeline(
         createdAt: 1,
         links: 1,
         "stats.subscriberCount": 1,
+        "stats.videoCount": 1,
+        "stats.shortCount": 1,
+        "stats.viewCount": 1,
         contentStats: 1,
         "metadata.roles": 1,
         "metadata.gender": 1,
@@ -62,71 +87,71 @@ export function channelPagePipeline(
     },
   ]
 }
-export function getPublicChannels(
+export async function getPublicChannels(
   filter: Record<string, unknown> = publicChannelFilter(),
   limit = 30,
-  offset = 0
+  offset = 0,
+  options: { includeContentStats?: boolean } = {}
 ) {
-  return ChannelModel.aggregate<Record<string, unknown>>(
+  const rows = await ChannelModel.aggregate<Record<string, unknown>>(
     channelPagePipeline(filter, limit, offset)
-  )
-    .exec()
-    .then(async (rows) => {
-      const channelIds = rows.map((row) => stringValue(row._id)).filter(Boolean)
-      if (!channelIds.length) return rows
+  ).exec()
+  if (!options.includeContentStats) return rows
 
-      // Calculate statistics for the whole channel page in one indexed content
-      // query. The former correlated $lookup scanned contents once per channel
-      // (100 scans on /actors), which stopped scaling as the catalogue grew.
-      const stats = await ContentModel.aggregate<{
-        _id: { channelId: string; kind: string }
-        count: number
-        views: number
-      }>([
-        {
-          $match: {
-            ...publicVideoFilter(),
-            kind: { $in: ["video", "short", "post"] },
-            ...contentChannelFilter(channelIds),
-          },
+  const channelIds = rows.map((row) => stringValue(row._id)).filter(Boolean)
+  if (!channelIds.length) return rows
+
+  // Opt-in only. Viewer lists normally use the materialized channel.stats
+  // values; recalculating them from contents made ordinary Link prefetches
+  // execute a catalogue aggregation.
+  const stats = await ContentModel.aggregate<{
+    _id: { channelId: string; kind: string }
+    count: number
+    views: number
+  }>([
+    {
+      $match: {
+        ...publicVideoFilter(),
+        kind: { $in: ["video", "short", "post"] },
+        ...contentChannelFilter(channelIds),
+      },
+    },
+    {
+      $project: {
+        kind: 1,
+        views: { $ifNull: ["$stats.viewCount", 0] },
+        relationIds: {
+          $setUnion: [
+            { $ifNull: ["$studioIds", []] },
+            { $ifNull: ["$actressIds", []] },
+            { $ifNull: ["$actorIds", []] },
+            { $ifNull: ["$directorIds", []] },
+            { $ifNull: ["$channelIds", []] },
+          ],
         },
-        {
-          $project: {
-            kind: 1,
-            views: { $ifNull: ["$stats.viewCount", 0] },
-            relationIds: {
-              $setUnion: [
-                { $ifNull: ["$studioIds", []] },
-                { $ifNull: ["$actressIds", []] },
-                { $ifNull: ["$actorIds", []] },
-                { $ifNull: ["$directorIds", []] },
-                { $ifNull: ["$channelIds", []] },
-              ],
-            },
-          },
-        },
-        { $unwind: "$relationIds" },
-        { $match: { relationIds: { $in: channelIds } } },
-        {
-          $group: {
-            _id: { channelId: "$relationIds", kind: "$kind" },
-            count: { $sum: 1 },
-            views: { $sum: "$views" },
-          },
-        },
-      ]).exec()
-      const statsByChannel = new Map<string, Array<Record<string, unknown>>>()
-      for (const item of stats) {
-        const channelId = stringValue(item._id?.channelId)
-        const list = statsByChannel.get(channelId) ?? []
-        list.push({ _id: item._id?.kind, count: item.count, views: item.views })
-        statsByChannel.set(channelId, list)
-      }
-      return rows.map((row) => ({
-        ...row,
-        contentStats: statsByChannel.get(stringValue(row._id)) ?? [],
-      }))
-    })
+      },
+    },
+    { $unwind: "$relationIds" },
+    { $match: { relationIds: { $in: channelIds } } },
+    {
+      $group: {
+        _id: { channelId: "$relationIds", kind: "$kind" },
+        count: { $sum: 1 },
+        views: { $sum: "$views" },
+      },
+    },
+  ]).exec()
+  const statsByChannel = new Map<string, Array<Record<string, unknown>>>()
+  for (const item of stats) {
+    const channelId = stringValue(item._id?.channelId)
+    const list = statsByChannel.get(channelId) ?? []
+    list.push({ _id: item._id?.kind, count: item.count, views: item.views })
+    statsByChannel.set(channelId, list)
+  }
+  return rows.map((row) => ({
+    ...row,
+    contentStats: statsByChannel.get(stringValue(row._id)) ?? [],
+  }))
 }
 
 export function mapChannel(row: Record<string, unknown>): Channel {
